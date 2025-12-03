@@ -56,6 +56,8 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 ### Inputs (SignalK → Device)
 - `navigation.anchor.automaticMode` - Enable/disable automatic control (boolean)
 - `navigation.anchor.targetRode` - Set target chain length in meters (float)
+- `navigation.anchor.manualUp` - Manual retrieve control (boolean)
+- `navigation.anchor.manualDown` - Manual deploy control (boolean)
 - `navigation.anchor.resetRode` - Reset counter to zero (boolean)
 
 ## Usage Examples
@@ -67,6 +69,19 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 
 // 2. Set target
 {"path": "navigation.anchor.targetRode", "value": 15.0}
+```
+
+### Manual windlass control
+```json
+// Retrieve chain (hold)
+{"path": "navigation.anchor.manualUp", "value": true}
+// Stop
+{"path": "navigation.anchor.manualUp", "value": false}
+
+// Deploy chain (hold)
+{"path": "navigation.anchor.manualDown", "value": true}
+// Stop
+{"path": "navigation.anchor.manualDown", "value": false}
 ```
 
 ### Stop and disable automatic mode

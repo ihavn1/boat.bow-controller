@@ -27,7 +27,7 @@ unsigned long last_pulse_count = 0;
 // Winch control variables
 float target_rode_length = -1.0;  // Target length in meters (-1 = no target)
 bool winch_active = false;
-bool automatic_mode_enabled = false;  // Enable/disable automatic control
+bool automatic_mode_enabled = false;  // Enable/disable automatic control (defaults to false/manual mode)
 
 // Interrupt handler for pulse counting with direction
 void IRAM_ATTR pulseISR() {
@@ -195,7 +195,46 @@ void setup()
         return reset_signal;
     }));
 
-    // Add SignalK listener for target rode length
+    // Add SignalK listener for manual windlass control (UP)
+    auto* manual_up_listener = new BoolSKListener("navigation.anchor.manualUp");
+    
+    manual_up_listener->connect_to(new LambdaTransform<bool, bool>([](bool activate) {
+        if (activate) {
+            if (!automatic_mode_enabled) {
+                setWinchUp();
+                debugD("Manual windlass UP activated");
+            } else {
+                debugD("Cannot manual control - automatic mode is enabled");
+            }
+        } else {
+            if (!automatic_mode_enabled) {
+                stopWinch();
+                debugD("Manual windlass UP stopped");
+            }
+        }
+        return activate;
+    }));
+
+    // Add SignalK listener for manual windlass control (DOWN)
+    auto* manual_down_listener = new BoolSKListener("navigation.anchor.manualDown");
+    
+    manual_down_listener->connect_to(new LambdaTransform<bool, bool>([](bool activate) {
+        if (activate) {
+            if (!automatic_mode_enabled) {
+                setWinchDown();
+                debugD("Manual windlass DOWN activated");
+            } else {
+                debugD("Cannot manual control - automatic mode is enabled");
+            }
+        } else {
+            if (!automatic_mode_enabled) {
+                stopWinch();
+                debugD("Manual windlass DOWN stopped");
+            }
+        }
+        return activate;
+    }));
+
     // Add SignalK listener to enable/disable automatic mode
     auto* auto_mode_listener = new BoolSKListener("navigation.anchor.automaticMode");
     
@@ -237,6 +276,7 @@ void setup()
     debugD("Anchor chain counter initialized - Pulse: GPIO %d, Direction: GPIO %d", PULSE_INPUT_PIN, DIRECTION_PIN);
     debugD("Winch control initialized - UP: GPIO %d, DOWN: GPIO %d", WINCH_UP_PIN, WINCH_DOWN_PIN);
     debugD("Anchor home sensor: GPIO %d", ANCHOR_HOME_PIN);
+    debugD("System started in MANUAL mode (automatic mode disabled)");
 }
 
 void loop()

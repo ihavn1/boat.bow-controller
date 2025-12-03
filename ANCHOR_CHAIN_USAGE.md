@@ -11,6 +11,8 @@ This ESP32-based anchor chain counter measures the deployed anchor rode length a
 ### Inputs (SignalK → Device)
 - **`navigation.anchor.automaticMode`** - Enable/disable automatic windlass control (boolean)
 - **`navigation.anchor.targetRode`** - Set target chain length for automatic control (float, meters)
+- **`navigation.anchor.manualUp`** - Manual retrieve control - hold to retrieve (boolean)
+- **`navigation.anchor.manualDown`** - Manual deploy control - hold to deploy (boolean)
 - **`navigation.anchor.resetRode`** - Reset the counter to zero (boolean)
 
 ## Usage Examples
@@ -80,6 +82,42 @@ The windlass will automatically retrieve chain until 5 meters remains, then stop
 
 Disabling automatic mode immediately stops the windlass.
 
+### Manual Windlass Control
+
+Manual control is only available when automatic mode is **disabled**. This provides remote control of the windlass via SignalK.
+
+#### Retrieve Chain Manually
+```json
+{
+  "context": "vessels.self",
+  "updates": [{
+    "values": [{
+      "path": "navigation.anchor.manualUp",
+      "value": true
+    }]
+  }]
+}
+```
+
+Send `true` to start retrieving, `false` to stop. The home sensor will automatically stop retrieval if the anchor reaches home position.
+
+#### Deploy Chain Manually
+```json
+{
+  "context": "vessels.self",
+  "updates": [{
+    "values": [{
+      "path": "navigation.anchor.manualDown",
+      "value": true
+    }]
+  }]
+}
+```
+
+Send `true` to start deploying, `false` to stop.
+
+**Important:** Manual control commands are ignored if automatic mode is enabled. You must disable automatic mode first to use manual control.
+
 ### Reset Counter
 ```json
 {
@@ -101,9 +139,18 @@ This resets the counter to zero, stops the windlass, and clears any active targe
 
 ## Manual Operation
 
-When operating the windlass manually (using physical switches), the counter continues to measure and report the chain length accurately. The automatic control will not interfere when automatic mode is disabled.
+### Physical Switch Control
+When operating the windlass manually using physical switches, the counter continues to measure and report the chain length accurately. The automatic control will not interfere when automatic mode is disabled.
 
-**Best Practice:** Before manual operation, disable automatic mode (`automaticMode: false`) to ensure automatic control cannot activate.
+### SignalK Manual Control
+You can also control the windlass remotely via SignalK using `manualUp` and `manualDown` paths. This works like a momentary switch - send `true` to activate, `false` to stop. Manual control is only available when automatic mode is disabled.
+
+**Benefits of SignalK manual control:**
+- Remote windlass operation from your boat's displays or apps
+- All safety features remain active (home sensor, counter tracking)
+- Integration with dashboards and automation systems
+
+**Best Practice:** Ensure automatic mode is disabled (`automaticMode: false`) before using any manual control method.
 
 ## Using with SignalK REST API
 
@@ -133,6 +180,32 @@ curl -X PUT http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigati
   -d '{"value": false}'
 ```
 
+### PUT Manual Control (Retrieve)
+```bash
+# Start retrieving
+curl -X PUT http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigation/anchor/manualUp \
+  -H "Content-Type: application/json" \
+  -d '{"value": true}'
+
+# Stop
+curl -X PUT http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigation/anchor/manualUp \
+  -H "Content-Type: application/json" \
+  -d '{"value": false}'
+```
+
+### PUT Manual Control (Deploy)
+```bash
+# Start deploying
+curl -X PUT http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigation/anchor/manualDown \
+  -H "Content-Type: application/json" \
+  -d '{"value": true}'
+
+# Stop
+curl -X PUT http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigation/anchor/manualDown \
+  -H "Content-Type: application/json" \
+  -d '{"value": false}'
+```
+
 ### PUT Reset Counter
 ```bash
 curl -X PUT http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigation/anchor/resetRode \
@@ -158,13 +231,14 @@ http://bow-sensors.local/
 Look for the "Meters per Pulse" configuration item to adjust the value based on your windlass gypsy diameter and pulse sensor.
 ## Safety Notes
 
-1. **Always test in safe conditions** before relying on automatic control
-2. **Keep manual override accessible** - the system respects manual operation when automatic mode is disabled
-3. **Monitor the process** - automatic control stops when target is reached (±0.2m tolerance)
-4. **Emergency stop** - send `automaticMode: false` to stop automatic operation immediately
-5. **Automatic home detection** - the system automatically stops and resets when anchor reaches home position
-6. **Enable automatic mode only when ready** - the windlass will not move automatically unless explicitly enabled
-7. **Home sensor prevents over-retrieval** - windlass cannot retrieve past the home position, preventing damage
+1. **System starts in manual mode** - on boot/restart, automatic mode is disabled by default
+2. **Always test in safe conditions** before relying on automatic control
+3. **Keep manual override accessible** - physical switches and SignalK manual control work when automatic mode is disabled
+4. **Monitor the process** - automatic control stops when target is reached (±0.2m tolerance)
+5. **Emergency stop** - send `automaticMode: false` to stop automatic operation immediately
+6. **Automatic home detection** - the system automatically stops and resets when anchor reaches home position
+7. **Enable automatic mode only when ready** - the windlass will not move automatically unless explicitly enabled
+8. **Home sensor prevents over-retrieval** - windlass cannot retrieve past the home position, preventing damage
 
 ## Troubleshooting
 
