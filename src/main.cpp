@@ -3,6 +3,7 @@
 #include "sensesp_app_builder.h"
 #include "sensesp/signalk/signalk_output.h"
 #include "sensesp/ui/config_item.h"
+#include "sensesp/ui/ui_controls.h"
 
 // Sensor-specific #includes:
 #include "sensesp/sensors/sensor.h"
@@ -15,10 +16,16 @@ using namespace sensesp;
 // GPIO pins for pulse input and direction
 #define PULSE_INPUT_PIN 25  // Change this to your desired GPIO pin
 #define DIRECTION_PIN 26    // GPIO pin for direction (HIGH = chain out, LOW = chain in)
+#define WINCH_UP_PIN 27     // GPIO pin to control winch UP (chain in)
+#define WINCH_DOWN_PIN 14   // GPIO pin to control winch DOWN (chain out)
 
 // Pulse counter variables
 volatile long pulse_count = 0;  // Changed to signed long for up/down counting
 unsigned long last_pulse_count = 0;
+
+// Winch control variables
+float target_rode_length = -1.0;  // Target length in meters (-1 = no target)
+bool winch_active = false;
 
 // Interrupt handler for pulse counting with direction
 void IRAM_ATTR pulseISR() {
@@ -33,29 +40,81 @@ void IRAM_ATTR pulseISR() {
     }
 }
 
+// Winch control functions
+void stopWinch() {
+    digitalWrite(WINCH_UP_PIN, LOW);
+    digitalWrite(WINCH_DOWN_PIN, LOW);
+    winch_active = false;
+    debugD("Winch stopped");
+}
+
+void setWinchUp() {
+    digitalWrite(WINCH_DOWN_PIN, LOW);
+    digitalWrite(WINCH_UP_PIN, HIGH);
+    winch_active = true;
+    debugD("Winch UP activated");
+}
+
+void setWinchDown() {
+    digitalWrite(WINCH_UP_PIN, LOW);
+    digitalWrite(WINCH_DOWN_PIN, HIGH);
+    winch_active = true;
+    debugD("Winch DOWN activated");
+}
+
+// Global configuration for meters per pulse (can be changed via web UI)
+float config_meters_per_pulse = 0.1;
+
 // Custom sensor class to read pulse count and convert to meters
 class PulseCounter : public FloatSensor {
 private:
-    float meters_per_pulse_;
     uint read_delay_;
 
 public:
-    PulseCounter(float meters_per_pulse = 0.1, uint read_delay = 100, String config_path = "")
-        : FloatSensor(config_path), meters_per_pulse_(meters_per_pulse), read_delay_(read_delay) {
+    PulseCounter(uint read_delay = 100, String config_path = "")
+        : FloatSensor(config_path), read_delay_(read_delay) {
         // Set up repeating task to read pulse count
         event_loop()->onRepeat(read_delay_, [this]() { this->update(); });
     }
 
     void update() {
         // Read the pulse count and convert to meters
-        float meters = pulse_count * meters_per_pulse_;
+        float meters = pulse_count * config_meters_per_pulse;
         this->emit(meters);
+        
+        // Check if we need to control the winch to reach target length
+        if (target_rode_length >= 0 && winch_active) {
+            float tolerance = config_meters_per_pulse * 2.0;  // 2 pulse tolerance
+            
+            if (fabs(meters - target_rode_length) <= tolerance) {
+                // Target reached
+                stopWinch();
+                target_rode_length = -1.0;  // Clear target
+                debugD("Target rode length reached: %.2f m", meters);
+            } else if (meters < target_rode_length) {
+                // Need more chain out
+                if (digitalRead(WINCH_DOWN_PIN) == LOW) {
+                    setWinchDown();
+                }
+            } else {
+                // Need chain in
+                if (digitalRead(WINCH_UP_PIN) == LOW) {
+                    setWinchUp();
+                }
+            }
+        }
     }
 
     // Method to reset the counter
     void reset() {
         pulse_count = 0;
+        stopWinch();  // Stop winch when resetting
+        target_rode_length = -1.0;  // Clear target
         debugD("Pulse counter reset to 0");
+    }
+
+    float get_meters_per_pulse() const {
+        return config_meters_per_pulse;
     }
 };
 
@@ -75,8 +134,22 @@ void setup()
     pinMode(DIRECTION_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(PULSE_INPUT_PIN), pulseISR, RISING);
 
-    // Create the pulse counter sensor
-    auto* pulse_counter = new PulseCounter(0.1, 100, "/pulse_counter/config");
+    // Configure winch control output pins
+    pinMode(WINCH_UP_PIN, OUTPUT);
+    pinMode(WINCH_DOWN_PIN, OUTPUT);
+    digitalWrite(WINCH_UP_PIN, LOW);
+    digitalWrite(WINCH_DOWN_PIN, LOW);
+
+    // Add configurable meters per pulse value
+    String meters_per_pulse_path = "/anchor/meters_per_pulse";
+    auto* meters_per_pulse_config = new NumberConfig(config_meters_per_pulse, meters_per_pulse_path);
+    ConfigItem(meters_per_pulse_config)
+        ->set_title("Meters per Pulse")
+        ->set_description("Distance in meters that each pulse represents")
+        ->set_sort_order(100);
+    
+    // Create the pulse counter sensor (update every 1000ms)
+    auto* pulse_counter = new PulseCounter(1000, "/pulse_counter/config");
     
     // Connect to SignalK output for anchor chain length
     pulse_counter->connect_to(new SKOutputFloat("navigation.anchor.currentRode", "/pulse_counter/sk_path"));
@@ -93,7 +166,35 @@ void setup()
         return reset_signal;
     }));
 
+    // Add SignalK listener for target rode length
+    auto* target_listener = new FloatSKListener("navigation.anchor.targetRode");
+    
+    // When target rode length is received, start winch control
+    target_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float target_length) {
+        if (target_length >= 0) {
+            target_rode_length = target_length;
+            float current_length = pulse_count * pulse_counter->get_meters_per_pulse();
+            
+            debugD("Target rode length set: %.2f m (current: %.2f m)", target_length, current_length);
+            
+            // Immediately start winch in correct direction
+            if (current_length < target_length) {
+                setWinchDown();  // Need more chain out
+            } else if (current_length > target_length) {
+                setWinchUp();    // Need chain in
+            } else {
+                debugD("Already at target length");
+            }
+        } else {
+            // Negative value stops the winch
+            stopWinch();
+            target_rode_length = -1.0;
+        }
+        return target_length;
+    }));
+
     debugD("Anchor chain counter initialized - Pulse: GPIO %d, Direction: GPIO %d", PULSE_INPUT_PIN, DIRECTION_PIN);
+    debugD("Winch control initialized - UP: GPIO %d, DOWN: GPIO %d", WINCH_UP_PIN, WINCH_DOWN_PIN);
 }
 
 void loop()
