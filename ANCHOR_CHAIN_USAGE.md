@@ -213,6 +213,97 @@ curl -X PUT http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigati
   -d '{"value": true}'
 ```
 
+## Node-RED Integration
+
+Node-RED embedded in SignalK can be used to create dashboards and automation for the anchor windlass control.
+
+### Using SignalK Put Node
+
+To send commands from Node-RED, use the **SignalK Put** node with properly formatted messages:
+
+#### Enable/Disable Automatic Mode
+```javascript
+// Function node code
+msg.payload = {
+    "path": "navigation.anchor.automaticMode",
+    "value": true  // or false to disable
+};
+return msg;
+```
+
+#### Set Target Rode Length
+```javascript
+// Function node code
+msg.payload = {
+    "path": "navigation.anchor.targetRode",
+    "value": 15.0  // Target length in meters
+};
+return msg;
+```
+
+#### Manual Control (UP/DOWN)
+```javascript
+// Manual UP - send true to start, false to stop
+msg.payload = {
+    "path": "navigation.anchor.manualUp",
+    "value": true
+};
+return msg;
+
+// Manual DOWN - send true to start, false to stop
+msg.payload = {
+    "path": "navigation.anchor.manualDown",
+    "value": true
+};
+return msg;
+```
+
+### Dashboard Example
+
+Create a simple control panel using Node-RED Dashboard nodes:
+
+1. **ui_switch** for Automatic Mode
+   - Topic: `navigation.anchor.automaticMode`
+   - On Payload: `true`
+   - Off Payload: `false`
+   - Connect to a function node that formats the message, then to SignalK Put node
+
+2. **ui_numeric** for Target Length
+   - Min: 0, Max: 100, Step: 0.5
+   - Connect to function node that formats as target rode message
+
+3. **ui_button** (Hold type) for Manual UP
+   - Sends `true` on press down, `false` on release
+   - Connect to function node that formats as manualUp message
+
+4. **ui_button** (Hold type) for Manual DOWN
+   - Sends `true` on press down, `false` on release
+   - Connect to function node that formats as manualDown message
+
+5. **ui_gauge** to display current rode length
+   - Subscribe to `navigation.anchor.currentRode`
+
+### Complete Function Node Example
+```javascript
+// This function formats any dashboard input for SignalK Put
+var path = msg.topic;  // Should be the SignalK path
+var value = msg.payload;
+
+// Convert string booleans if needed
+if (value === "true") value = true;
+if (value === "false") value = false;
+
+// Format for SignalK Put
+msg.payload = {
+    "path": path,
+    "value": value
+};
+
+return msg;
+```
+
+Connect this function node output to a **signalk-send-put** node to send the command.
+
 ## Configuration
 
 ### Hardware Setup
