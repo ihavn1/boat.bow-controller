@@ -191,47 +191,28 @@ void setup()
         }
     }));
 
-    // Add SignalK value listener for manual windlass control (UP) - listens on command path
-    auto* manual_up_output = new SKOutputBool("navigation.anchor.manualUpStatus", "/manual_up_status/sk_path");
-    auto* manual_up_listener = new BoolSKListener("navigation.anchor.manualUpCommand");
+    // Add SignalK value listener for manual windlass control - single path with three states
+    // Use IntSKListener: 1 = UP, 0 = STOP, -1 = DOWN
+    auto* manual_control_output = new SKOutputInt("navigation.anchor.manualControlStatus", "/manual_control_status/sk_path");
+    auto* manual_control_listener = new IntSKListener("navigation.anchor.manualControl");
     
-    manual_up_listener->connect_to(new LambdaTransform<bool, bool>([](bool activate) {
-        if (activate) {
-            if (!automatic_mode_enabled) {
+    manual_control_listener->connect_to(new LambdaTransform<int, int>([](int command) {
+        if (!automatic_mode_enabled) {
+            if (command == 1) {
                 setWinchUp();
                 debugD("Manual windlass UP activated");
-            } else {
-                debugD("Cannot manual control - automatic mode is enabled");
-            }
-        } else {
-            if (!automatic_mode_enabled) {
-                stopWinch();
-                debugD("Manual windlass UP stopped");
-            }
-        }
-        return activate;
-    }))->connect_to(manual_up_output);
-
-    // Add SignalK value listener for manual windlass control (DOWN) - listens on command path
-    auto* manual_down_output = new SKOutputBool("navigation.anchor.manualDownStatus", "/manual_down_status/sk_path");
-    auto* manual_down_listener = new BoolSKListener("navigation.anchor.manualDownCommand");
-    
-    manual_down_listener->connect_to(new LambdaTransform<bool, bool>([](bool activate) {
-        if (activate) {
-            if (!automatic_mode_enabled) {
+            } else if (command == -1) {
                 setWinchDown();
                 debugD("Manual windlass DOWN activated");
             } else {
-                debugD("Cannot manual control - automatic mode is enabled");
+                stopWinch();
+                debugD("Manual windlass STOPPED");
             }
         } else {
-            if (!automatic_mode_enabled) {
-                stopWinch();
-                debugD("Manual windlass DOWN stopped");
-            }
+            debugD("Cannot manual control - automatic mode is enabled");
         }
-        return activate;
-    }))->connect_to(manual_down_output);
+        return command;
+    }))->connect_to(manual_control_output);
 
     // Add SignalK value listener to enable/disable automatic mode - listens on command path
     // Using FloatSKListener with numeric values due to BoolSKListener bug (always returns true)

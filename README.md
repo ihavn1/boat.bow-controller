@@ -54,39 +54,39 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 - `navigation.anchor.currentRode` - Current chain length in meters
 
 ### Inputs (SignalK → Device)
-- `navigation.anchor.automaticMode` - Enable/disable automatic control (number: 1=enable, 0=disable)
-- `navigation.anchor.targetRode` - Set target chain length in meters (float)
-- `navigation.anchor.manualUp` - Manual retrieve control (boolean)
-- `navigation.anchor.manualDown` - Manual deploy control (boolean)
+- `navigation.anchor.automaticModeCommand` - Enable/disable automatic control (float: >0.5=enable, <=0.5=disable) *Note: FloatSKListener doesn't work with Node-RED's signalk-send-pathvalue node*
+- `navigation.anchor.targetRodeCommand` - Set target chain length in meters (float) *Note: FloatSKListener doesn't work with Node-RED's signalk-send-pathvalue node*
+- `navigation.anchor.manualControl` - Manual windlass control (integer: 1=UP, 0=STOP, -1=DOWN)
 - `navigation.anchor.resetRode` - Reset counter to zero (boolean)
 
 ## Usage Examples
 
 ### Deploy 15 meters automatically
 ```json
-// 1. Enable automatic mode (send 1 to enable, 0 to disable)
-{"path": "navigation.anchor.automaticMode", "value": 1}
+// 1. Enable automatic mode (send value > 0.5 to enable, <= 0.5 to disable)
+{"path": "navigation.anchor.automaticModeCommand", "value": 1.0}
 
 // 2. Set target
-{"path": "navigation.anchor.targetRode", "value": 15.0}
+{"path": "navigation.anchor.targetRodeCommand", "value": 15.0}
 ```
+
+**Note**: FloatSKListener doesn't receive values from Node-RED's signalk-send-pathvalue node. Consider using separate enable/disable paths or preset target buttons instead.
 
 ### Manual windlass control
 ```json
-// Retrieve chain (hold)
-{"path": "navigation.anchor.manualUp", "value": true}
-// Stop
-{"path": "navigation.anchor.manualUp", "value": false}
+// Retrieve chain (UP)
+{"path": "navigation.anchor.manualControl", "value": 1}
 
-// Deploy chain (hold)
-{"path": "navigation.anchor.manualDown", "value": true}
-// Stop
-{"path": "navigation.anchor.manualDown", "value": false}
+// Stop windlass
+{"path": "navigation.anchor.manualControl", "value": 0}
+
+// Deploy chain (DOWN)
+{"path": "navigation.anchor.manualControl", "value": -1}
 ```
 
 ### Stop and disable automatic mode
 ```json
-{"path": "navigation.anchor.automaticMode", "value": 0}
+{"path": "navigation.anchor.automaticModeCommand", "value": 0}
 ```
 
 ## Documentation

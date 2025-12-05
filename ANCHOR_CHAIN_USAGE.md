@@ -7,17 +7,17 @@ This ESP32-based anchor chain counter measures the deployed anchor rode length a
 
 ### Output Paths (Device → SignalK)
 - **`navigation.anchor.currentRode`** - Current anchor chain length in meters (updated every 1 second)
-- **`navigation.anchor.automaticModeStatus`** - Current automatic mode state (boolean)
+- **`navigation.anchor.automaticModeStatus`** - Current automatic mode state (float)
 - **`navigation.anchor.targetRodeStatus`** - Current target chain length setting (float, meters)
-- **`navigation.anchor.manualUpStatus`** - Current manual UP state (boolean)
-- **`navigation.anchor.manualDownStatus`** - Current manual DOWN state (boolean)
+- **`navigation.anchor.manualControlStatus`** - Current manual control state (integer: 1=UP, 0=STOP, -1=DOWN)
 
 ### Input Paths (SignalK → Device - Commands)
-- **`navigation.anchor.automaticModeCommand`** - Enable/disable automatic windlass control (number: 1=enable, 0=disable)
-- **`navigation.anchor.targetRodeCommand`** - Set target chain length for automatic control (float, meters)
-- **`navigation.anchor.manualUpCommand`** - Manual retrieve control - hold to retrieve (boolean)
-- **`navigation.anchor.manualDownCommand`** - Manual deploy control - hold to deploy (boolean)
+- **`navigation.anchor.automaticModeCommand`** - Enable/disable automatic windlass control (float: >0.5=enable, ≤0.5=disable) **WARNING: FloatSKListener doesn't work with Node-RED's signalk-send-pathvalue node**
+- **`navigation.anchor.targetRodeCommand`** - Set target chain length for automatic control (float, meters) **WARNING: FloatSKListener doesn't work with Node-RED's signalk-send-pathvalue node**
+- **`navigation.anchor.manualControl`** - Manual windlass control (integer: 1=UP, 0=STOP, -1=DOWN)
 - **`navigation.anchor.resetRode`** - Reset the counter to zero (boolean)
+
+**Note on FloatSKListener**: The automatic mode and target rode listeners use `FloatSKListener` which does NOT receive values from Node-RED's `signalk-send-pathvalue` node. For Node-RED integration, consider using workarounds such as separate enable/disable paths or preset target buttons.
 
 ## Usage Examples
 
@@ -88,37 +88,48 @@ Disabling automatic mode (value: 0) immediately stops the windlass.
 
 ### Manual Windlass Control
 
-Manual control is only available when automatic mode is **disabled**. This provides remote control of the windlass via SignalK.
+Manual control is only available when automatic mode is **disabled**. Uses a single SignalK path with integer values.
 
-#### Retrieve Chain Manually
+#### Retrieve Chain (UP)
 ```json
 {
   "context": "vessels.self",
   "updates": [{
     "values": [{
-      "path": "navigation.anchor.manualUpCommand",
-      "value": true
+      "path": "navigation.anchor.manualControl",
+      "value": 1
     }]
   }]
 }
 ```
 
-Send `true` to start retrieving, `false` to stop. The home sensor will automatically stop retrieval if the anchor reaches home position.
-
-#### Deploy Chain Manually
+#### Stop Windlass
 ```json
 {
   "context": "vessels.self",
   "updates": [{
     "values": [{
-      "path": "navigation.anchor.manualDownCommand",
-      "value": true
+      "path": "navigation.anchor.manualControl",
+      "value": 0
     }]
   }]
 }
 ```
 
-Send `true` to start deploying, `false` to stop.
+#### Deploy Chain (DOWN)
+```json
+{
+  "context": "vessels.self",
+  "updates": [{
+    "values": [{
+      "path": "navigation.anchor.manualControl",
+      "value": -1
+    }]
+  }]
+}
+```
+
+The home sensor will automatically stop retrieval if the anchor reaches home position.
 
 **Important:** Manual control commands are ignored if automatic mode is enabled. You must disable automatic mode first to use manual control.
 
@@ -147,7 +158,7 @@ This resets the counter to zero, stops the windlass, and clears any active targe
 When operating the windlass manually using physical switches, the counter continues to measure and report the chain length accurately. The automatic control will not interfere when automatic mode is disabled.
 
 ### SignalK Manual Control
-You can also control the windlass remotely via SignalK using `manualUpCommand` and `manualDownCommand` paths. This works like a momentary switch - send `true` to activate, `false` to stop. Manual control is only available when automatic mode is disabled.
+You can control the windlass remotely via SignalK using the `navigation.anchor.manualControl` path with integer values: `1` for UP (retrieve), `0` for STOP, and `-1` for DOWN (deploy). Manual control is only available when automatic mode is disabled.
 
 **Benefits of SignalK manual control:**
 - Remote windlass operation from your boat's displays or apps
@@ -184,30 +195,22 @@ curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
   -d '{"updates":[{"values":[{"path":"navigation.anchor.automaticModeCommand","value":0}]}]}'
 ```
 
-### POST Manual Control (Retrieve)
+### POST Manual Control
 ```bash
-# Start retrieving
+# Retrieve (UP)
 curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
   -H "Content-Type: application/json" \
-  -d '{"updates":[{"values":[{"path":"navigation.anchor.manualUpCommand","value":true}]}]}'
+  -d '{"updates":[{"values":[{"path":"navigation.anchor.manualControl","value":1}]}]}'
 
 # Stop
 curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
   -H "Content-Type: application/json" \
-  -d '{"updates":[{"values":[{"path":"navigation.anchor.manualUpCommand","value":false}]}]}'
-```
+  -d '{"updates":[{"values":[{"path":"navigation.anchor.manualControl","value":0}]}]}'
 
-### POST Manual Control (Deploy)
-```bash
-# Start deploying
+# Deploy (DOWN)
 curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
   -H "Content-Type: application/json" \
-  -d '{"updates":[{"values":[{"path":"navigation.anchor.manualDownCommand","value":true}]}]}'
-
-# Stop
-curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
-  -H "Content-Type: application/json" \
-  -d '{"updates":[{"values":[{"path":"navigation.anchor.manualDownCommand","value":false}]}]}'
+  -d '{"updates":[{"values":[{"path":"navigation.anchor.manualControl","value":-1}]}]}'
 ```
 
 ### POST Reset Counter
@@ -245,19 +248,13 @@ msg.payload = {
 return msg;
 ```
 
-#### Manual Control (UP/DOWN)
+#### Manual Control
 ```javascript
-// Manual UP - send true to start, false to stop
+// Function node code for manual control
+// UP = 1, STOP = 0, DOWN = -1
 msg.payload = {
-    "path": "navigation.anchor.manualUpCommand",
-    "value": true
-};
-return msg;
-
-// Manual DOWN - send true to start, false to stop
-msg.payload = {
-    "path": "navigation.anchor.manualDownCommand",
-    "value": true
+    "path": "navigation.anchor.manualControl",
+    "value": 1  // 1 for UP, 0 for STOP, -1 for DOWN
 };
 return msg;
 ```
@@ -279,17 +276,14 @@ Create a simple control panel using Node-RED Dashboard nodes:
    - Connect to function node that formats as target rode command
    - Display status from `navigation.anchor.targetRodeStatus`
 
-3. **ui_button** (Hold type) for Manual UP
-   - Sends `true` on press down, `false` on release
-   - Topic: `navigation.anchor.manualUpCommand`
-   - Connect to function node that formats as manualUp command
-   - Display status from `navigation.anchor.manualUpStatus`
-
-4. **ui_button** (Hold type) for Manual DOWN
-   - Sends `true` on press down, `false` on release
-   - Topic: `navigation.anchor.manualDownCommand`
-   - Connect to function node that formats as manualDown command
-   - Display status from `navigation.anchor.manualDownStatus`
+3. **ui_button-group** for Manual Control
+   - Topic: `navigation.anchor.manualControl`
+   - Options:
+     - "UP" button: value `1`
+     - "STOP" button: value `0`
+     - "DOWN" button: value `-1`
+   - Connect to signalk-send-pathvalue node
+   - Display status from `navigation.anchor.manualControlStatus`
 
 5. **ui_gauge** to display current rode length
    - Subscribe to `navigation.anchor.currentRode`
