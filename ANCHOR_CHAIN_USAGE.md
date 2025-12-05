@@ -13,7 +13,7 @@ This ESP32-based anchor chain counter measures the deployed anchor rode length a
 - **`navigation.anchor.manualDownStatus`** - Current manual DOWN state (boolean)
 
 ### Input Paths (SignalK → Device - Commands)
-- **`navigation.anchor.automaticModeCommand`** - Enable/disable automatic windlass control (boolean)
+- **`navigation.anchor.automaticModeCommand`** - Enable/disable automatic windlass control (number: 1=enable, 0=disable)
 - **`navigation.anchor.targetRodeCommand`** - Set target chain length for automatic control (float, meters)
 - **`navigation.anchor.manualUpCommand`** - Manual retrieve control - hold to retrieve (boolean)
 - **`navigation.anchor.manualDownCommand`** - Manual deploy control - hold to deploy (boolean)
@@ -33,13 +33,13 @@ The device continuously publishes the current rode length to `navigation.anchor.
   "updates": [{
     "values": [{
       "path": "navigation.anchor.automaticModeCommand",
-      "value": true
+      "value": 1
     }]
   }]
 }
 ```
 
-Automatic mode must be enabled before the windlass will respond to target commands.
+Automatic mode must be enabled (value: 1) before the windlass will respond to target commands. Send 0 to disable.
 
 #### Deploy 15 meters of chain
 ```json
@@ -78,13 +78,13 @@ The windlass will automatically retrieve chain until 5 meters remains, then stop
   "updates": [{
     "values": [{
       "path": "navigation.anchor.automaticModeCommand",
-      "value": false
+      "value": 0
     }]
   }]
 }
 ```
 
-Disabling automatic mode immediately stops the windlass.
+Disabling automatic mode (value: 0) immediately stops the windlass.
 
 ### Manual Windlass Control
 
@@ -167,7 +167,7 @@ curl http://your-signalk-server:3000/signalk/v1/api/vessels/self/navigation/anch
 ```bash
 curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
   -H "Content-Type: application/json" \
-  -d '{"updates":[{"values":[{"path":"navigation.anchor.automaticModeCommand","value":true}]}]}'
+  -d '{"updates":[{"values":[{"path":"navigation.anchor.automaticModeCommand","value":1}]}]}'
 ```
 
 ### POST Target Chain Length (Deploy 20m)
@@ -181,7 +181,7 @@ curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
 ```bash
 curl -X POST http://your-signalk-server:3000/signalk/v1/api/vessels/self \
   -H "Content-Type: application/json" \
-  -d '{"updates":[{"values":[{"path":"navigation.anchor.automaticModeCommand","value":false}]}]}'
+  -d '{"updates":[{"values":[{"path":"navigation.anchor.automaticModeCommand","value":0}]}]}'
 ```
 
 ### POST Manual Control (Retrieve)
@@ -230,7 +230,7 @@ To send commands from Node-RED, use the **SignalK Put** node with properly forma
 // Function node code
 msg.payload = {
     "path": "navigation.anchor.automaticModeCommand",
-    "value": true  // or false to disable
+    "value": 1  // Use 1 to enable, 0 to disable
 };
 return msg;
 ```
@@ -268,8 +268,8 @@ Create a simple control panel using Node-RED Dashboard nodes:
 
 1. **ui_switch** for Automatic Mode
    - Topic: `navigation.anchor.automaticModeCommand`
-   - On Payload: `true`
-   - Off Payload: `false`
+   - On Payload: `1`
+   - Off Payload: `0`
    - Connect to a function node that formats the message, then to SignalK delta node
    - Display status from `navigation.anchor.automaticModeStatus`
 
@@ -300,9 +300,11 @@ Create a simple control panel using Node-RED Dashboard nodes:
 var path = msg.topic;  // Should be the SignalK command path
 var value = msg.payload;
 
-// Convert string booleans if needed
+// Convert string values if needed
 if (value === "true") value = true;
 if (value === "false") value = false;
+if (value === "1") value = 1;
+if (value === "0") value = 0;
 
 // Format for SignalK delta update
 msg.payload = {
@@ -345,7 +347,7 @@ Look for the "Meters per Pulse" configuration item to adjust the value based on 
 2. **Always test in safe conditions** before relying on automatic control
 3. **Keep manual override accessible** - physical switches and SignalK manual control work when automatic mode is disabled
 4. **Monitor the process** - automatic control stops when target is reached (±0.2m tolerance)
-5. **Emergency stop** - send `automaticModeCommand: false` to stop automatic operation immediately
+5. **Emergency stop** - send `automaticModeCommand: 0` to stop automatic operation immediately
 6. **Automatic home detection** - the system automatically stops and resets when anchor reaches home position
 7. **Enable automatic mode only when ready** - the windlass will not move automatically unless explicitly enabled
 8. **Home sensor prevents over-retrieval** - windlass cannot retrieve past the home position, preventing damage
@@ -357,7 +359,7 @@ Look for the "Meters per Pulse" configuration item to adjust the value based on 
 - Verify direction sensor on GPIO 26 shows correct state
 
 ### Windlass not responding to automatic control
-- **Verify automatic mode is enabled** (send `automaticModeCommand: true`)
+- **Verify automatic mode is enabled** (send `automaticModeCommand: 1`)
 - Check that a valid target was set (send `targetRodeCommand >= 0`)
 - Verify GPIO 27 (UP) and GPIO 14 (DOWN) connections
 - Ensure no manual control is active

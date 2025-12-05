@@ -234,10 +234,14 @@ void setup()
     }))->connect_to(manual_down_output);
 
     // Add SignalK value listener to enable/disable automatic mode - listens on command path
+    // Using FloatSKListener instead of BoolSKListener due to parsing issues with boolean values
+    // Send 1 for true/enable, 0 for false/disable from Node-RED
     auto* auto_mode_output = new SKOutputBool("navigation.anchor.automaticModeStatus", "/automatic_mode_status/sk_path");
-    auto* auto_mode_listener = new BoolSKListener("navigation.anchor.automaticModeCommand");
+    auto* auto_mode_listener = new FloatSKListener("navigation.anchor.automaticModeCommand");
     
-    auto_mode_listener->connect_to(new LambdaTransform<bool, bool>([](bool enable) {
+    auto_mode_listener->connect_to(new LambdaTransform<float, bool>([](float value) {
+        bool enable = (value != 0.0);  // Treat 0 as false, any non-zero as true
+        debugD("Received automatic mode command: %.1f -> %s", value, enable ? "TRUE" : "FALSE");
         automatic_mode_enabled = enable;
         if (enable) {
             debugD("Automatic windlass control ENABLED");
