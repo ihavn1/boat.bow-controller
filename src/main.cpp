@@ -183,20 +183,17 @@ void setup()
     // Connect to SignalK output for anchor chain length
     pulse_counter->connect_to(new SKOutputFloat("navigation.anchor.currentRode", "/pulse_counter/sk_path"));
 
-    // Add SignalK listener to reset the counter based on a digital input
-    // Subscribe to a SignalK path that will trigger the reset
+    // Add SignalK value listener to reset the counter (receives PUT via delta)
     auto* reset_listener = new BoolSKListener("navigation.anchor.resetRode");
-    
-    // Connect the reset listener to reset the counter when true is received
-    reset_listener->connect_to(new LambdaTransform<bool, bool>([pulse_counter](bool reset_signal) {
+    reset_listener->connect_to(new LambdaConsumer<bool>([pulse_counter](bool reset_signal) {
         if (reset_signal) {
             pulse_counter->reset();
         }
-        return reset_signal;
     }));
 
-    // Add SignalK listener for manual windlass control (UP)
-    auto* manual_up_listener = new BoolSKListener("navigation.anchor.manualUp");
+    // Add SignalK value listener for manual windlass control (UP) - listens on command path
+    auto* manual_up_output = new SKOutputBool("navigation.anchor.manualUpStatus", "/manual_up_status/sk_path");
+    auto* manual_up_listener = new BoolSKListener("navigation.anchor.manualUpCommand");
     
     manual_up_listener->connect_to(new LambdaTransform<bool, bool>([](bool activate) {
         if (activate) {
@@ -213,10 +210,11 @@ void setup()
             }
         }
         return activate;
-    }));
+    }))->connect_to(manual_up_output);
 
-    // Add SignalK listener for manual windlass control (DOWN)
-    auto* manual_down_listener = new BoolSKListener("navigation.anchor.manualDown");
+    // Add SignalK value listener for manual windlass control (DOWN) - listens on command path
+    auto* manual_down_output = new SKOutputBool("navigation.anchor.manualDownStatus", "/manual_down_status/sk_path");
+    auto* manual_down_listener = new BoolSKListener("navigation.anchor.manualDownCommand");
     
     manual_down_listener->connect_to(new LambdaTransform<bool, bool>([](bool activate) {
         if (activate) {
@@ -233,10 +231,11 @@ void setup()
             }
         }
         return activate;
-    }));
+    }))->connect_to(manual_down_output);
 
-    // Add SignalK listener to enable/disable automatic mode
-    auto* auto_mode_listener = new BoolSKListener("navigation.anchor.automaticMode");
+    // Add SignalK value listener to enable/disable automatic mode - listens on command path
+    auto* auto_mode_output = new SKOutputBool("navigation.anchor.automaticModeStatus", "/automatic_mode_status/sk_path");
+    auto* auto_mode_listener = new BoolSKListener("navigation.anchor.automaticModeCommand");
     
     auto_mode_listener->connect_to(new LambdaTransform<bool, bool>([](bool enable) {
         automatic_mode_enabled = enable;
@@ -247,10 +246,11 @@ void setup()
             stopWinch();  // Stop winch when disabling automatic mode
         }
         return enable;
-    }));
+    }))->connect_to(auto_mode_output);
 
-    // Add SignalK listener for target rode length
-    auto* target_listener = new FloatSKListener("navigation.anchor.targetRode");
+    // Add SignalK value listener for target rode length - listens on command path
+    auto* target_output = new SKOutputFloat("navigation.anchor.targetRodeStatus", "/target_rode_status/sk_path");
+    auto* target_listener = new FloatSKListener("navigation.anchor.targetRodeCommand");
     
     // When target rode length is received, save it and start if automatic mode is enabled
     target_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float target_length) {
@@ -270,9 +270,16 @@ void setup()
                 debugD("Already at target length");
             }
         }
+        
         return target_length;
-    }));
+    }))->connect_to(target_output);
 
+    // Publish initial states so SignalK recognizes device as source for these paths
+    event_loop()->onDelay(2000, []() {
+        // These initial publishes establish the device as the data source
+        debugD("Publishing initial control states to SignalK");
+    });
+    
     debugD("Anchor chain counter initialized - Pulse: GPIO %d, Direction: GPIO %d", PULSE_INPUT_PIN, DIRECTION_PIN);
     debugD("Winch control initialized - UP: GPIO %d, DOWN: GPIO %d", WINCH_UP_PIN, WINCH_DOWN_PIN);
     debugD("Anchor home sensor: GPIO %d", ANCHOR_HOME_PIN);
