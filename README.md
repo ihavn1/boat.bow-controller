@@ -5,22 +5,22 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 ## Features
 
 ### Anchor Chain Length Monitoring
-- **Pulse-based counting** - Accurate chain length measurement using pulse sensor
-- **Bidirectional tracking** - Counts up when deploying, down when retrieving
+- **Bidirectional pulse counting** - Accurate chain length measurement with direction sensing
+- **Real-time tracking** - Continuous monitoring of deployed chain length
 - **SignalK integration** - Reports current rode length to `navigation.anchor.currentRode`
-- **Automatic calibration** - Configurable meters-per-pulse via web interface
+- **Web-based calibration** - Configurable meters-per-pulse conversion factor
 
 ### Automatic Windlass Control
-- **Target-based deployment** - Set desired chain length via SignalK
-- **Enable/disable mode** - Separate control for automatic operation
-- **Smart direction control** - Automatically deploys or retrieves to reach target
-- **Tolerance-based stopping** - Stops within ±2 pulses of target
+- **Arm and fire operation** - Set target first, then enable automatic mode when ready
+- **Intelligent control** - Automatically deploys or retrieves chain to reach target
+- **Auto-disable on completion** - Returns to manual mode when target reached
+- **Precision stopping** - Stops within ±2 pulses (±0.2m default) of target
 
 ### Safety Features
 - **Home position detection** - Prevents over-retrieval with dedicated sensor
-- **Automatic counter reset** - Resets to zero when anchor reaches home position
-- **Manual operation support** - Full manual control with automatic mode disabled
-- **Hardware limit protection** - Cannot retrieve past home position
+- **Automatic counter reset** - Resets to zero when anchor reaches home
+- **Manual override protection** - Manual controls disabled during automatic operation
+- **Status feedback** - Real-time mode and target status via SignalK
 
 ## Hardware Requirements
 
@@ -50,42 +50,50 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 
 ## SignalK Paths
 
-### Output (Device → SignalK)
-- `navigation.anchor.currentRode` - Current chain length in meters
+### Outputs (Device → SignalK)
+| Path | Type | Description |
+|------|------|-------------|
+| `navigation.anchor.currentRode` | float | Current chain length (meters) |
+| `navigation.anchor.automaticModeStatus` | float | Automatic mode state (1.0=enabled, 0.0=disabled) |
+| `navigation.anchor.targetRodeStatus` | float | Current target length (meters) |
+| `navigation.anchor.manualControlStatus` | int | Manual control echo (1=UP, 0=STOP, -1=DOWN) |
 
 ### Inputs (SignalK → Device)
-- `navigation.anchor.automaticModeCommand` - Enable/disable automatic control (float: >0.5=enable, <=0.5=disable) *Note: FloatSKListener doesn't work with Node-RED's signalk-send-pathvalue node*
-- `navigation.anchor.targetRodeCommand` - Set target chain length in meters (float) *Note: FloatSKListener doesn't work with Node-RED's signalk-send-pathvalue node*
-- `navigation.anchor.manualControl` - Manual windlass control (integer: 1=UP, 0=STOP, -1=DOWN)
-- `navigation.anchor.resetRode` - Reset counter to zero (boolean)
+| Path | Type | Values | Description |
+|------|------|--------|-------------|
+| `navigation.anchor.automaticModeCommand` | float | >0.5=enable, ≤0.5=disable | Enable/disable automatic control |
+| `navigation.anchor.targetRodeCommand` | float | meters | Arm target length for automatic mode |
+| `navigation.anchor.manualControl` | int | 1=UP, 0=STOP, -1=DOWN | Manual windlass control |
+| `navigation.anchor.resetRode` | bool | true | Reset counter to zero |
 
 ## Usage Examples
 
-### Deploy 15 meters automatically
+### Automatic Deployment (Arm and Fire)
 ```json
-// 1. Enable automatic mode (send value > 0.5 to enable, <= 0.5 to disable)
+// 1. Arm target (prepare but don't start)
+{"path": "navigation.anchor.targetRodeCommand", "value": 15.0}
+
+// 2. Fire when ready (starts windlass automatically)
 {"path": "navigation.anchor.automaticModeCommand", "value": 1.0}
 
-// 2. Set target
-{"path": "navigation.anchor.targetRodeCommand", "value": 15.0}
+// System will automatically disable when target reached
 ```
 
-**Note**: FloatSKListener doesn't receive values from Node-RED's signalk-send-pathvalue node. Consider using separate enable/disable paths or preset target buttons instead.
-
-### Manual windlass control
+### Manual Windlass Control
 ```json
-// Retrieve chain (UP)
+// Retrieve chain
 {"path": "navigation.anchor.manualControl", "value": 1}
 
-// Stop windlass
+// Stop
 {"path": "navigation.anchor.manualControl", "value": 0}
 
-// Deploy chain (DOWN)
+// Deploy chain
 {"path": "navigation.anchor.manualControl", "value": -1}
 ```
 
-### Stop and disable automatic mode
+### Emergency Stop
 ```json
+// Immediately disable automatic mode and stop winch
 {"path": "navigation.anchor.automaticModeCommand", "value": 0}
 ```
 
