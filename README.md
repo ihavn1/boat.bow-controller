@@ -51,12 +51,12 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 ## SignalK Paths
 
 ### Outputs (Device → SignalK)
-| Path | Type | Description |
-|------|------|-------------|
-| `navigation.anchor.currentRode` | float | Current chain length (meters) |
-| `navigation.anchor.automaticModeStatus` | float | Automatic mode state (1.0=enabled, 0.0=disabled) |
-| `navigation.anchor.targetRodeStatus` | float | Current target length (meters) |
-| `navigation.anchor.manualControlStatus` | int | Manual control echo (1=UP, 0=STOP, -1=DOWN) |
+| Path | Type | Units | Description |
+|------|------|-------|-------------|
+| `navigation.anchor.currentRode` | float | m | Current chain length (meters) |
+| `navigation.anchor.automaticModeStatus` | float | - | Automatic mode state (1.0=enabled, 0.0=disabled) |
+| `navigation.anchor.targetRodeStatus` | float | m | Current target length (meters) |
+| `navigation.anchor.manualControlStatus` | int | - | Manual control echo (1=UP, 0=STOP, -1=DOWN) |
 
 ### Inputs (SignalK → Device)
 | Path | Type | Values | Description |

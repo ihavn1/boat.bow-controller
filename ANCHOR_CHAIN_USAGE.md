@@ -6,12 +6,12 @@ ESP32-based anchor chain counter with automatic windlass control via SignalK. Fe
 ## SignalK Paths
 
 ### Output Paths (Device → SignalK)
-| Path | Type | Update Rate | Description |
-|------|------|-------------|-------------|
-| `navigation.anchor.currentRode` | float | 1s | Current chain length (meters) |
-| `navigation.anchor.automaticModeStatus` | float | on change | Auto mode state (1.0=enabled, 0.0=disabled) |
-| `navigation.anchor.targetRodeStatus` | float | on change | Armed target length (meters) |
-| `navigation.anchor.manualControlStatus` | int | on change | Manual control echo (1=UP, 0=STOP, -1=DOWN) |
+| Path | Type | Units | Update Rate | Description |
+|------|------|-------|-------------|-------------|
+| `navigation.anchor.currentRode` | float | m | 1s | Current chain length (meters) |
+| `navigation.anchor.automaticModeStatus` | float | - | on change | Auto mode state (1.0=enabled, 0.0=disabled) |
+| `navigation.anchor.targetRodeStatus` | float | m | on change | Armed target length (meters) |
+| `navigation.anchor.manualControlStatus` | int | - | on change | Manual control echo (1=UP, 0=STOP, -1=DOWN) |
 
 ### Input Paths (SignalK → Device)
 | Path | Type | Values | Description |

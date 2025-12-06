@@ -177,8 +177,10 @@ void setup()
     // Create the pulse counter sensor (update every 1000ms)
     auto* pulse_counter = new PulseCounter(1000, "/pulse_counter/config");
     
-    // Connect to SignalK output for anchor chain length
-    pulse_counter->connect_to(new SKOutputFloat("navigation.anchor.currentRode", "/pulse_counter/sk_path"));
+    // Connect to SignalK output for anchor chain length with units
+    auto* rode_output = new SKOutputFloat("navigation.anchor.currentRode", "/pulse_counter/sk_path");
+    rode_output->set_metadata(new SKMetadata("m"));  // Set units to meters
+    pulse_counter->connect_to(rode_output);
 
     // Add SignalK value listener to reset the counter (receives PUT via delta)
     auto* reset_listener = new BoolSKListener("navigation.anchor.resetRode");
@@ -242,6 +244,7 @@ void setup()
 
     // Target Rode Length: Arm target for automatic mode
     auto* target_output = new SKOutputFloat("navigation.anchor.targetRodeStatus", "/target_rode_status/sk_path");
+    target_output->set_metadata(new SKMetadata("m"));  // Set units to meters
     auto* target_listener = new FloatSKListener("navigation.anchor.targetRodeCommand");
     
     target_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float target) {
