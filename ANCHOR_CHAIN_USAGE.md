@@ -245,15 +245,15 @@ return msg;
 ## Configuration
 
 ### Hardware Setup
-- **Pulse Input:** GPIO 25 - Connect chain counter pulse sensor
-- **Direction Input:** GPIO 26 - HIGH = chain out, LOW = chain in
-- **Anchor Home Sensor:** GPIO 33 - Detects when anchor is fully retrieved (active LOW)
-- **Winch UP Output:** GPIO 27 - Activates windlass to retrieve chain
-- **Winch DOWN Output:** GPIO 14 - Activates windlass to deploy chain
-- **Remote UP Input:** GPIO 12 - Manual UP from remote (active HIGH)
-- **Remote DOWN Input:** GPIO 13 - Manual DOWN from remote (active HIGH)
-- **Remote Func 3 Input:** GPIO 15 - Spare remote input (active HIGH)
-- **Remote Func 4 Input:** GPIO 16 - Spare remote input (active HIGH)
+- **Pulse Input (Input):** GPIO 25 - Connect chain counter pulse sensor
+- **Direction Input (Input):** GPIO 26 - HIGH = chain out, LOW = chain in
+- **Anchor Home Sensor (Input):** GPIO 33 - Detects when anchor is fully retrieved (active LOW)
+- **Winch UP Output (Output):** GPIO 27 - Activates windlass to retrieve chain (active LOW)
+- **Winch DOWN Output (Output):** GPIO 14 - Activates windlass to deploy chain (active LOW)
+- **Remote UP Input (Input):** GPIO 12 - Manual UP from remote (active HIGH)
+- **Remote DOWN Input (Input):** GPIO 13 - Manual DOWN from remote (active HIGH)
+- **Remote Func 3 Input (Input):** GPIO 15 - Spare remote input (active HIGH)
+- **Remote Func 4 Input (Input):** GPIO 16 - Spare remote input (active HIGH)
 
 ### Calibration
 The meters per pulse conversion factor (default: 0.1) can be configured via the SensESP web interface at:

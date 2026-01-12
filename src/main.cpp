@@ -47,8 +47,8 @@ void IRAM_ATTR pulseISR() {
 
 // Winch Control Functions
 void stopWinch() {
-    digitalWrite(WINCH_UP_PIN, LOW);
-    digitalWrite(WINCH_DOWN_PIN, LOW);
+    digitalWrite(WINCH_UP_PIN, HIGH);
+    digitalWrite(WINCH_DOWN_PIN, HIGH);
     winch_active = false;
     debugD("Winch stopped");
 }
@@ -59,15 +59,15 @@ void setWinchUp() {
         stopWinch();
         return;
     }
-    digitalWrite(WINCH_DOWN_PIN, LOW);
-    digitalWrite(WINCH_UP_PIN, HIGH);
+    digitalWrite(WINCH_DOWN_PIN, HIGH);
+    digitalWrite(WINCH_UP_PIN, LOW);
     winch_active = true;
     debugD("Winch UP activated");
 }
 
 void setWinchDown() {
-    digitalWrite(WINCH_UP_PIN, LOW);
-    digitalWrite(WINCH_DOWN_PIN, HIGH);
+    digitalWrite(WINCH_UP_PIN, HIGH);
+    digitalWrite(WINCH_DOWN_PIN, LOW);
     winch_active = true;
     debugD("Winch DOWN activated");
 }
@@ -159,7 +159,7 @@ public:
         bool is_home = (digitalRead(ANCHOR_HOME_PIN) == LOW);
         
         if (is_home) {
-            if (winch_active && digitalRead(WINCH_UP_PIN) == HIGH) {
+            if (winch_active && digitalRead(WINCH_UP_PIN) == LOW) {
                 stopWinch();
                 debugD("Anchor home reached - stopped and reset");
             }
@@ -226,8 +226,8 @@ void setup()
     // Configure winch control output pins
     pinMode(WINCH_UP_PIN, OUTPUT);
     pinMode(WINCH_DOWN_PIN, OUTPUT);
-    digitalWrite(WINCH_UP_PIN, LOW);
-    digitalWrite(WINCH_DOWN_PIN, LOW);
+    digitalWrite(WINCH_UP_PIN, HIGH);
+    digitalWrite(WINCH_DOWN_PIN, HIGH);
 
     // Configure remote control input pins
     pinMode(REMOTE_UP_PIN, INPUT);

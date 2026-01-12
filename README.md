@@ -32,17 +32,17 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 
 ## GPIO Pin Configuration
 
-| Function | GPIO | Description |
-|----------|------|-------------|
-| Pulse Input | 25 | Chain counter pulse sensor |
-| Direction | 26 | HIGH = chain out, LOW = chain in |
-| Anchor Home | 33 | LOW = anchor at home position |
-| Winch UP | 27 | Activate to retrieve chain |
-| Winch DOWN | 14 | Activate to deploy chain |
-| Remote UP | 12 | Manual UP from remote control (active HIGH) |
-| Remote DOWN | 13 | Manual DOWN from remote control (active HIGH) |
-| Remote Func 3| 15 | Spare remote input (active HIGH) |
-| Remote Func 4| 16 | Spare remote input (active HIGH) |
+| Function | GPIO | Direction | Description |
+|----------|------|-----------|-------------|
+| Pulse Input | 25 | Input | Chain counter pulse sensor |
+| Direction | 26 | Input | HIGH = chain out, LOW = chain in |
+| Anchor Home | 33 | Input | LOW = anchor at home position |
+| Winch UP | 27 | Output | Activate to retrieve chain (active LOW) |
+| Winch DOWN | 14 | Output | Activate to deploy chain (active LOW) |
+| Remote UP | 12 | Input | Manual UP from remote control (active HIGH) |
+| Remote DOWN | 13 | Input | Manual DOWN from remote control (active HIGH) |
+| Remote Func 3| 15 | Input | Spare remote input (active HIGH) |
+| Remote Func 4| 16 | Input | Spare remote input (active HIGH) |
 
 ## Quick Start
 
