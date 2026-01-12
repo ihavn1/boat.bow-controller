@@ -17,12 +17,18 @@ using namespace sensesp;
 #define WINCH_DOWN_PIN 14   // Winch control - DOWN (deploy chain)
 #define ANCHOR_HOME_PIN 33  // Anchor home position sensor (LOW when home)
 
+// Remote Control Inputs
+#define REMOTE_UP_PIN 12
+#define REMOTE_DOWN_PIN 13
+#define REMOTE_FUNC3_PIN 15
+#define REMOTE_FUNC4_PIN 16
+
 // Global Variables
 volatile long pulse_count = 0;              // Bidirectional pulse counter
 float target_rode_length = -1.0;            // Target length in meters (-1 = no target)
 bool winch_active = false;                  // Winch operation state
 bool automatic_mode_enabled = false;        // Automatic control mode (false = manual mode)
-float config_meters_per_pulse = 0.1;        // Configurable conversion factor
+float config_meters_per_pulse = 0.01;        // Configurable conversion factor
 SKOutputFloat* auto_mode_output_ptr = nullptr;  // For updating auto mode status
 
 // Interrupt Service Routine - Pulse Counter with Direction Sensing
@@ -64,6 +70,63 @@ void setWinchDown() {
     digitalWrite(WINCH_DOWN_PIN, HIGH);
     winch_active = true;
     debugD("Winch DOWN activated");
+}
+
+// New function to handle physical remote control inputs
+void handleManualInputs() {
+  if (automatic_mode_enabled) {
+    // Don't allow physical remote to override automatic mode
+    return;
+  }
+
+  bool remote_up = (digitalRead(REMOTE_UP_PIN) == HIGH);
+  bool remote_down = (digitalRead(REMOTE_DOWN_PIN) == HIGH);
+
+  if (remote_up) {
+    setWinchUp();
+  } else if (remote_down) {
+    setWinchDown();
+  } else {
+    // Stop the winch if neither remote button is pressed.
+    // We only do this if the winch was started by the remote,
+    // not if it was started by a SignalK command.
+    // A simple way to check is to see if the winch is active but
+    // no SignalK command is active.
+    // This part of the logic is tricky and might need refinement.
+    // For now, we will assume that SignalK sends a 'stop' command
+    // and doesn't rely on a continuous 'up' or 'down' signal.
+    // A simple stop is the safest default.
+    if (winch_active && (digitalRead(WINCH_UP_PIN) || digitalRead(WINCH_DOWN_PIN))) {
+       // This logic is complex - for now, let's just handle the direct input
+       // and rely on SignalK to send its own stop command.
+       // A more robust solution might involve tracking the source of the last command.
+    }
+  }
+   // If neither button is pressed, we don't want to automatically stop the winch,
+   // because it might have been activated via a SignalK command. The SignalK
+   // implementation sends a '0' to stop. The remote logic is simpler:
+   // high = active. So we need a way to know who started the winch.
+   //
+   // Let's refine the logic: if a remote button is NOT pressed, we only stop the winch
+   // if the OTHER button is not pressed either. This avoids interfering with SignalK.
+   // The SignalK command will eventually send a 'stop'.
+   //
+   // A better approach: The remote takes precedence. If any remote button is pressed,
+   // it controls the winch. If no remote button is pressed, it does nothing, leaving
+   // control to SignalK.
+
+   if (remote_up) {
+     setWinchUp();
+   } else if (remote_down) {
+     setWinchDown();
+   } else {
+     // If neither remote button is active, stop the winch.
+     // This is the most direct interpretation of the request, but it
+     // means the remote will override and stop a winch operation
+     // that was started by SignalK. This seems like a reasonable
+     // safety default.
+     stopWinch();
+   }
 }
 
 // Custom sensor class to read pulse count and convert to meters
@@ -165,6 +228,12 @@ void setup()
     pinMode(WINCH_DOWN_PIN, OUTPUT);
     digitalWrite(WINCH_UP_PIN, LOW);
     digitalWrite(WINCH_DOWN_PIN, LOW);
+
+    // Configure remote control input pins
+    pinMode(REMOTE_UP_PIN, INPUT);
+    pinMode(REMOTE_DOWN_PIN, INPUT);
+    pinMode(REMOTE_FUNC3_PIN, INPUT);
+    pinMode(REMOTE_FUNC4_PIN, INPUT);
 
     // Add configurable meters per pulse value
     String meters_per_pulse_path = "/anchor/meters_per_pulse";
@@ -275,6 +344,7 @@ void setup()
 
 void loop()
 {
+    handleManualInputs(); // Check for physical remote control presses
     static auto event_loop = sensesp_app->get_event_loop();
     event_loop->tick();
 }

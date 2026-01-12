@@ -39,6 +39,10 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 | Anchor Home | 33 | LOW = anchor at home position |
 | Winch UP | 27 | Activate to retrieve chain |
 | Winch DOWN | 14 | Activate to deploy chain |
+| Remote UP | 12 | Manual UP from remote control (active HIGH) |
+| Remote DOWN | 13 | Manual DOWN from remote control (active HIGH) |
+| Remote Func 3| 15 | Spare remote input (active HIGH) |
+| Remote Func 4| 16 | Spare remote input (active HIGH) |
 
 ## Quick Start
 
@@ -83,13 +87,15 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 ```json
 // Retrieve chain
 {"path": "navigation.anchor.manualControl", "value": 1}
-
-// Stop
-{"path": "navigation.anchor.manualControl", "value": 0}
-
-// Deploy chain
+// ... existing content ...
 {"path": "navigation.anchor.manualControl", "value": -1}
 ```
+
+### Physical Remote Control
+The system supports a physical remote control for manual operation. The winch will be active as long as the corresponding remote button is held down.
+- The remote control overrides SignalK manual commands.
+- The remote control will NOT operate if the system is in automatic mode.
+- The `Anchor Home` safety feature remains active, preventing retrieval if the anchor is already home.
 
 ### Emergency Stop
 ```json
