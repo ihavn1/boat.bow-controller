@@ -83,7 +83,11 @@ You can also enable automatic mode first, then set the target - the windlass wil
 
 ### Manual Windlass Control
 
-Manual control uses a single path with integer values. Only works when automatic mode is **disabled**.
+Manual control can be performed via SignalK or a physical remote. Both methods only work when automatic mode is **disabled**.
+
+#### SignalK Manual Control
+
+SignalK manual control uses a single path with integer values.
 
 | Value | Action |
 |-------|--------|
@@ -106,7 +110,16 @@ Manual control uses a single path with integer values. Only works when automatic
 {"path": "navigation.anchor.manualControl", "value": -1}
 ```
 
-**Note:** Manual commands are blocked when automatic mode is enabled. The home sensor automatically stops retrieval at home position.
+**Note:** SignalK manual commands are blocked when automatic mode is enabled.
+
+#### Physical Remote Control
+The system supports a hardwired remote control for direct manual operation.
+
+- **Operation**: The winch is active only as long as the corresponding UP or DOWN button is held down. Releasing the button stops the winch.
+- **Priority**: The physical remote overrides any active SignalK manual command.
+- **Safety**: The remote is disabled when the system is in automatic mode. The anchor home safety feature remains active, preventing over-retrieval.
+
+The home sensor automatically stops retrieval at home position.
 
 ### Reset Counter
 ```json
@@ -237,6 +250,10 @@ return msg;
 - **Anchor Home Sensor:** GPIO 33 - Detects when anchor is fully retrieved (active LOW)
 - **Winch UP Output:** GPIO 27 - Activates windlass to retrieve chain
 - **Winch DOWN Output:** GPIO 14 - Activates windlass to deploy chain
+- **Remote UP Input:** GPIO 12 - Manual UP from remote (active HIGH)
+- **Remote DOWN Input:** GPIO 13 - Manual DOWN from remote (active HIGH)
+- **Remote Func 3 Input:** GPIO 15 - Spare remote input (active HIGH)
+- **Remote Func 4 Input:** GPIO 16 - Spare remote input (active HIGH)
 
 ### Calibration
 The meters per pulse conversion factor (default: 0.1) can be configured via the SensESP web interface at:
