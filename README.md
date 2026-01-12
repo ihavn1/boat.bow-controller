@@ -1,4 +1,4 @@
-"# Boat Bow Sensors - Anchor Chain Counter & Windlass Control
+# Boat Bow Sensors - Anchor Chain Counter & Windlass Control
 
 An ESP32-based anchor chain counter and automatic windlass control system with SignalK integration.
 
