@@ -66,4 +66,7 @@ public:
             return true;
         }
     }
+
+private:
+    WinchController& winch_;  ///< Reference to winch controller
 };

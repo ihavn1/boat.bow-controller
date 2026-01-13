@@ -198,8 +198,8 @@ void setup()
                 auto_mode_controller->update(current);
             }
         } else {
-            debugD("Automatic mode DISABLED"tomatic mode DISABLED");
-            stopWinch();
+            debugD("Automatic mode DISABLED");
+            winch_controller.stop();
         }
         return value;
     }))->connect_to(auto_mode_output);
@@ -209,7 +209,8 @@ void setup()
     target_output->set_metadata(new SKMetadata("m"));  // Set units to meters
     auto* target_listener = new FloatSKListener("navigation.anchor.targetRodeCommand");
     
-    targauto_mode_controller->setTargetLength(target);
+    target_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float target) {
+        auto_mode_controller->setTargetLength(target);
         float current = pulse_count * pulse_counter->get_meters_per_pulse();
         
         debugD("Target armed: %.2f m (current: %.2f m)", target, current);
@@ -236,7 +237,6 @@ void loop()
         remote_control->processInputs(auto_mode_controller->isEnabled());
     }
     
-    handleManualInputs(); // Check for physical remote control presses
     static auto event_loop = sensesp_app->get_event_loop();
     event_loop->tick();
 }
