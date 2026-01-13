@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <Arduino.h>
+#include "pin_config.h"
 
 // Mock GPIO states for testing
 bool mock_gpio_states[40] = {false};
@@ -13,13 +14,14 @@ bool test_automatic_mode_enabled = false;
 float test_config_meters_per_pulse = 0.1;
 
 // GPIO pin definitions (must match main.cpp)
-#define PULSE_INPUT_PIN 25
-#define DIRECTION_PIN 26
-#define WINCH_UP_PIN 27
-#define WINCH_DOWN_PIN 14
-#define ANCHOR_HOME_PIN 33
-#define REMOTE_UP_PIN 12
-#define REMOTE_DOWN_PIN 13
+// Now using PinConfig from pin_config.h
+#define PULSE_INPUT_PIN PinConfig::PULSE_INPUT
+#define DIRECTION_PIN PinConfig::DIRECTION
+#define WINCH_UP_PIN PinConfig::WINCH_UP
+#define WINCH_DOWN_PIN PinConfig::WINCH_DOWN
+#define ANCHOR_HOME_PIN PinConfig::ANCHOR_HOME
+#define REMOTE_UP_PIN PinConfig::REMOTE_UP
+#define REMOTE_DOWN_PIN PinConfig::REMOTE_DOWN
 
 // Mock Arduino functions
 int digitalRead(uint8_t pin) {

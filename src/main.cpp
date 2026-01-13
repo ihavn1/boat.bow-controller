@@ -8,34 +8,30 @@
 #include "sensesp/transforms/lambda_transform.h"
 #include "sensesp/system/valueconsumer.h"
 
+#include "pin_config.h"
+#include "winch_controller.h"
+#include "home_sensor.h"
+#include "automatic_mode_controller.h"
+#include "remote_control.h"
+
 using namespace sensesp;
 
-// GPIO Pin Definitions
-#define PULSE_INPUT_PIN 25  // Pulse input from chain counter sensor
-#define DIRECTION_PIN 26    // Direction sensing (HIGH = chain out, LOW = chain in)
-#define WINCH_UP_PIN 27     // Winch control - UP (retrieve chain)
-#define WINCH_DOWN_PIN 14   // Winch control - DOWN (deploy chain)
-#define ANCHOR_HOME_PIN 33  // Anchor home position sensor (LOW when home)
-
-// Remote Control Inputs
-#define REMOTE_UP_PIN 12
-#define REMOTE_DOWN_PIN 13
-#define REMOTE_FUNC3_PIN 15
-#define REMOTE_FUNC4_PIN 16
+// Global system components
+WinchController winch_controller;
+HomeSensor home_sensor;
+AutomaticModeController* auto_mode_controller = nullptr;
+RemoteControl* remote_control = nullptr;
 
 // Global Variables
-volatile long pulse_count = 0;              // Bidirectional pulse counter
-float target_rode_length = -1.0;            // Target length in meters (-1 = no target)
-bool winch_active = false;                  // Winch operation state
-bool automatic_mode_enabled = false;        // Automatic control mode (false = manual mode)
-float config_meters_per_pulse = 0.01;        // Configurable conversion factor
+volatile long pulse_count = 0;              // Bidirectional pulse counter (ISR access)
+float config_meters_per_pulse = 0.01;       // Configurable conversion factor
 SKOutputFloat* auto_mode_output_ptr = nullptr;  // For updating auto mode status
 
 // Interrupt Service Routine - Pulse Counter with Direction Sensing
 void IRAM_ATTR pulseISR() {
     delayMicroseconds(10);  // Allow direction signal to stabilize
     
-    if (digitalRead(DIRECTION_PIN)) {
+    if (digitalRead(PinConfig::DIRECTION)) {
         pulse_count++;  // Chain out
     } else {
         pulse_count--;  // Chain in
@@ -43,90 +39,6 @@ void IRAM_ATTR pulseISR() {
             pulse_count = 0;  // Prevent negative values
         }
     }
-}
-
-// Winch Control Functions
-void stopWinch() {
-    digitalWrite(WINCH_UP_PIN, HIGH);
-    digitalWrite(WINCH_DOWN_PIN, HIGH);
-    winch_active = false;
-    debugD("Winch stopped");
-}
-
-void setWinchUp() {
-    if (digitalRead(ANCHOR_HOME_PIN) == LOW) {
-        debugD("Anchor already home - cannot retrieve further");
-        stopWinch();
-        return;
-    }
-    digitalWrite(WINCH_DOWN_PIN, HIGH);
-    digitalWrite(WINCH_UP_PIN, LOW);
-    winch_active = true;
-    debugD("Winch UP activated");
-}
-
-void setWinchDown() {
-    digitalWrite(WINCH_UP_PIN, HIGH);
-    digitalWrite(WINCH_DOWN_PIN, LOW);
-    winch_active = true;
-    debugD("Winch DOWN activated");
-}
-
-// New function to handle physical remote control inputs
-void handleManualInputs() {
-  if (automatic_mode_enabled) {
-    // Don't allow physical remote to override automatic mode
-    return;
-  }
-
-  bool remote_up = (digitalRead(REMOTE_UP_PIN) == HIGH);
-  bool remote_down = (digitalRead(REMOTE_DOWN_PIN) == HIGH);
-
-  if (remote_up) {
-    setWinchUp();
-  } else if (remote_down) {
-    setWinchDown();
-  } else {
-    // Stop the winch if neither remote button is pressed.
-    // We only do this if the winch was started by the remote,
-    // not if it was started by a SignalK command.
-    // A simple way to check is to see if the winch is active but
-    // no SignalK command is active.
-    // This part of the logic is tricky and might need refinement.
-    // For now, we will assume that SignalK sends a 'stop' command
-    // and doesn't rely on a continuous 'up' or 'down' signal.
-    // A simple stop is the safest default.
-    if (winch_active && (digitalRead(WINCH_UP_PIN) || digitalRead(WINCH_DOWN_PIN))) {
-       // This logic is complex - for now, let's just handle the direct input
-       // and rely on SignalK to send its own stop command.
-       // A more robust solution might involve tracking the source of the last command.
-    }
-  }
-   // If neither button is pressed, we don't want to automatically stop the winch,
-   // because it might have been activated via a SignalK command. The SignalK
-   // implementation sends a '0' to stop. The remote logic is simpler:
-   // high = active. So we need a way to know who started the winch.
-   //
-   // Let's refine the logic: if a remote button is NOT pressed, we only stop the winch
-   // if the OTHER button is not pressed either. This avoids interfering with SignalK.
-   // The SignalK command will eventually send a 'stop'.
-   //
-   // A better approach: The remote takes precedence. If any remote button is pressed,
-   // it controls the winch. If no remote button is pressed, it does nothing, leaving
-   // control to SignalK.
-
-   if (remote_up) {
-     setWinchUp();
-   } else if (remote_down) {
-     setWinchDown();
-   } else {
-     // If neither remote button is active, stop the winch.
-     // This is the most direct interpretation of the request, but it
-     // means the remote will override and stop a winch operation
-     // that was started by SignalK. This seems like a reasonable
-     // safety default.
-     stopWinch();
-   }
 }
 
 // Custom sensor class to read pulse count and convert to meters
@@ -148,54 +60,37 @@ public:
         // Periodic debug output
         static unsigned long last_debug = 0;
         if (millis() - last_debug > 5000) {
-            bool dir_state = digitalRead(DIRECTION_PIN);
+            bool dir_state = digitalRead(PinConfig::DIRECTION);
             debugD("Pulse count: %ld, Direction: %s, Chain: %.2f m", 
                    pulse_count, dir_state ? "OUT" : "IN", meters);
             last_debug = millis();
         }
         
         // Home position detection and auto-reset
-        static bool was_home = false;
-        bool is_home = (digitalRead(ANCHOR_HOME_PIN) == LOW);
-        
-        if (is_home) {
-            if (winch_active && digitalRead(WINCH_UP_PIN) == LOW) {
-                stopWinch();
+        if (home_sensor.isHome()) {
+            if (winch_controller.isMovingUp()) {
+                winch_controller.stop();
                 debugD("Anchor home reached - stopped and reset");
             }
-            if (!was_home) {
+            if (home_sensor.justArrived()) {
                 pulse_count = 0;
                 debugD("Anchor at home - counter reset");
             }
         }
-        was_home = is_home;
         
         // Automatic mode control logic
-        if (automatic_mode_enabled && target_rode_length >= 0) {
-            float tolerance = config_meters_per_pulse * 2.0;
-            
-            if (fabs(meters - target_rode_length) <= tolerance) {
-                if (winch_active) {
-                    stopWinch();
-                    automatic_mode_enabled = false;
-                    if (auto_mode_output_ptr) {
-                        auto_mode_output_ptr->set_input(0.0);
-                    }
-                    debugD("Target %.2f m reached - automatic mode disabled", meters);
-                }
-            } else if (meters < target_rode_length && digitalRead(WINCH_DOWN_PIN) == LOW) {
-                setWinchDown();
-            } else if (meters > target_rode_length && digitalRead(WINCH_UP_PIN) == LOW) {
-                setWinchUp();
-            }
+        if (auto_mode_controller) {
+            auto_mode_controller->update(meters);
         }
     }
 
     // Method to reset the counter
     void reset() {
         pulse_count = 0;
-        stopWinch();  // Stop winch when resetting
-        target_rode_length = -1.0;  // Clear target
+        winch_controller.stop();
+        if (auto_mode_controller) {
+            auto_mode_controller->setTargetLength(-1.0);
+        }
         debugD("Pulse counter reset to 0");
     }
 
@@ -215,25 +110,22 @@ void setup()
                       .set_hostname("bow-sensors")
                       ->get_app();
 
+    // Initialize hardware controllers
+    winch_controller.initialize();
+    home_sensor.initialize();
+    
+    // Initialize automatic mode controller
+    auto_mode_controller = new AutomaticModeController(winch_controller);
+    auto_mode_controller->setTolerance(config_meters_per_pulse * 2.0);
+    
+    // Initialize remote control
+    remote_control = new RemoteControl(winch_controller);
+    remote_control->initialize();
+
     // Configure the pulse input pin and direction pin
-    pinMode(PULSE_INPUT_PIN, INPUT_PULLUP);
-    pinMode(DIRECTION_PIN, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(PULSE_INPUT_PIN), pulseISR, RISING);
-
-    // Configure anchor home position sensor
-    pinMode(ANCHOR_HOME_PIN, INPUT_PULLUP);
-
-    // Configure winch control output pins
-    pinMode(WINCH_UP_PIN, OUTPUT);
-    pinMode(WINCH_DOWN_PIN, OUTPUT);
-    digitalWrite(WINCH_UP_PIN, HIGH);
-    digitalWrite(WINCH_DOWN_PIN, HIGH);
-
-    // Configure remote control input pins
-    pinMode(REMOTE_UP_PIN, INPUT);
-    pinMode(REMOTE_DOWN_PIN, INPUT);
-    pinMode(REMOTE_FUNC3_PIN, INPUT);
-    pinMode(REMOTE_FUNC4_PIN, INPUT);
+    pinMode(PinConfig::PULSE_INPUT, INPUT_PULLUP);
+    pinMode(PinConfig::DIRECTION, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(PinConfig::PULSE_INPUT), pulseISR, RISING);
 
     // Add configurable meters per pulse value
     String meters_per_pulse_path = "/anchor/meters_per_pulse";
@@ -264,47 +156,49 @@ void setup()
     auto* manual_control_listener = new IntSKListener("navigation.anchor.manualControl");
     
     manual_control_listener->connect_to(new LambdaTransform<int, int>([](int command) {
-        if (!automatic_mode_enabled) {
+        if (!auto_mode_controller->isEnabled()) {
             if (command == 1) {
-                setWinchUp();
+                winch_controller.moveUp();
             } else if (command == -1) {
-                setWinchDown();
+                winch_controller.moveDown();
             } else {
-                stopWinch();
+                winch_controller.stop();
             }
             debugD("Manual control: %s", command == 1 ? "UP" : (command == -1 ? "DOWN" : "STOP"));
         } else {
             debugD("Manual control blocked - automatic mode active");
-        }return command;
+        }
+        return command;
     }))->connect_to(manual_control_output);
 
     // Automatic Mode Control: Enable/disable automatic windlass control
     // Using FloatSKListener (value > 0.5 = enable, <= 0.5 = disable)
     auto* auto_mode_output = new SKOutputFloat("navigation.anchor.automaticModeStatus", "/automatic_mode_status/sk_path");
-    auto_mode_output_ptr = auto_mode_output;
+    
+    // Set callback to update SignalK when target is reached
+    auto_mode_controller->setOnTargetReachedCallback([auto_mode_output]() {
+        if (auto_mode_output) {
+            auto_mode_output->set_input(0.0);
+        }
+    });
+    
     auto* auto_mode_listener = new FloatSKListener("navigation.anchor.automaticModeCommand");
     
     auto_mode_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float value) {
         bool enable = (value > 0.5);
-        automatic_mode_enabled = enable;
+        auto_mode_controller->setEnabled(enable);
         
         if (enable) {
             debugD("Automatic mode ENABLED");
-            // If target already armed, start winch immediately
-            if (target_rode_length >= 0) {
+            // If target already armed, trigger immediate position update
+            if (auto_mode_controller->getTargetLength() >= 0) {
                 float current = pulse_count * pulse_counter->get_meters_per_pulse();
-                debugD("Target armed: %.2f m, current: %.2f m", target_rode_length, current);
-                
-                if (current < target_rode_length) {
-                    setWinchDown();
-                } else if (current > target_rode_length) {
-                    setWinchUp();
-                } else {
-                    debugD("Already at target");
-                }
+                debugD("Target armed: %.2f m, current: %.2f m", 
+                       auto_mode_controller->getTargetLength(), current);
+                auto_mode_controller->update(current);
             }
         } else {
-            debugD("Automatic mode DISABLED");
+            debugD("Automatic mode DISABLED"tomatic mode DISABLED");
             stopWinch();
         }
         return value;
@@ -315,35 +209,33 @@ void setup()
     target_output->set_metadata(new SKMetadata("m"));  // Set units to meters
     auto* target_listener = new FloatSKListener("navigation.anchor.targetRodeCommand");
     
-    target_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float target) {
-        target_rode_length = target;
+    targauto_mode_controller->setTargetLength(target);
         float current = pulse_count * pulse_counter->get_meters_per_pulse();
         
         debugD("Target armed: %.2f m (current: %.2f m)", target, current);
         
         // Start winch immediately if automatic mode already enabled
-        if (automatic_mode_enabled && target >= 0) {
-            if (current < target) {
-                setWinchDown();
-            } else if (current > target) {
-                setWinchUp();
-            } else {
-                debugD("Already at target");
-            }
+        if (auto_mode_controller->isEnabled() && target >= 0) {
+            auto_mode_controller->update(current);
         }
         
         return target;
     }))->connect_to(target_output);
 
     debugD("=== Anchor Chain Counter System ===");
-    debugD("Pulse input: GPIO %d, Direction: GPIO %d", PULSE_INPUT_PIN, DIRECTION_PIN);
-    debugD("Winch control: UP=GPIO %d, DOWN=GPIO %d", WINCH_UP_PIN, WINCH_DOWN_PIN);
-    debugD("Home sensor: GPIO %d", ANCHOR_HOME_PIN);
+    debugD("Pulse input: GPIO %d, Direction: GPIO %d", PinConfig::PULSE_INPUT, PinConfig::DIRECTION);
+    debugD("Winch control: UP=GPIO %d, DOWN=GPIO %d", PinConfig::WINCH_UP, PinConfig::WINCH_DOWN);
+    debugD("Home sensor: GPIO %d", PinConfig::ANCHOR_HOME);
     debugD("Mode: MANUAL (automatic disabled)");
 }
 
 void loop()
 {
+    // Process physical remote control inputs
+    if (remote_control) {
+        remote_control->processInputs(auto_mode_controller->isEnabled());
+    }
+    
     handleManualInputs(); // Check for physical remote control presses
     static auto event_loop = sensesp_app->get_event_loop();
     event_loop->tick();
