@@ -41,8 +41,10 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 | Winch DOWN | 14 | Output | Activate to deploy chain (active LOW) |
 | Remote UP | 12 | Input | Manual UP from remote control (active HIGH) |
 | Remote DOWN | 13 | Input | Manual DOWN from remote control (active HIGH) |
-| Remote Func 3| 15 | Input | Spare remote input (active HIGH) |
-| Remote Func 4| 16 | Input | Spare remote input (active HIGH) |
+| Remote Func 3| 15 | Input | Spare remote input (reserved, active HIGH) |
+| Remote Func 4| 16 | Input | Spare remote input (reserved, active HIGH) |
+| Remote Out 1 | 4 | Output | Spare remote output (reserved, active LOW) |
+| Remote Out 2 | 5 | Output | Spare remote output (reserved, active LOW) |
 
 ## Quick Start
 

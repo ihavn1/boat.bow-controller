@@ -227,6 +227,7 @@ void setup()
     debugD("Pulse input: GPIO %d, Direction: GPIO %d", PinConfig::PULSE_INPUT, PinConfig::DIRECTION);
     debugD("Winch control: UP=GPIO %d, DOWN=GPIO %d", PinConfig::WINCH_UP, PinConfig::WINCH_DOWN);
     debugD("Home sensor: GPIO %d", PinConfig::ANCHOR_HOME);
+    debugD("Remote outputs: OUT1=GPIO %d, OUT2=GPIO %d", PinConfig::REMOTE_OUT1, PinConfig::REMOTE_OUT2);
     debugD("Mode: MANUAL (automatic disabled)");
 }
 

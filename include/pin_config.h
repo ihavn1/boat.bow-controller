@@ -24,4 +24,8 @@ struct PinConfig {
     static constexpr uint8_t REMOTE_DOWN = 13;  ///< Physical remote DOWN button (active HIGH)
     static constexpr uint8_t REMOTE_FUNC3 = 15; ///< Spare remote input (future use)
     static constexpr uint8_t REMOTE_FUNC4 = 16; ///< Spare remote input (future use)
+    
+    // Remote control outputs (active-LOW: write LOW to activate, HIGH to deactivate)
+    static constexpr uint8_t REMOTE_OUT1 = 4;   ///< Spare remote output 1
+    static constexpr uint8_t REMOTE_OUT2 = 5;   ///< Spare remote output 2
 };

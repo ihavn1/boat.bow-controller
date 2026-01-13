@@ -26,13 +26,19 @@ public:
 
     /**
      * @brief Initialize remote control GPIO pins
-     * Sets all remote input pins to INPUT mode
+     * Sets all remote input pins to INPUT mode and output pins to OUTPUT (inactive HIGH)
      */
     void initialize() {
         pinMode(PinConfig::REMOTE_UP, INPUT);
         pinMode(PinConfig::REMOTE_DOWN, INPUT);
         pinMode(PinConfig::REMOTE_FUNC3, INPUT);
         pinMode(PinConfig::REMOTE_FUNC4, INPUT);
+        
+        // Initialize spare outputs (inactive HIGH for active-LOW outputs)
+        pinMode(PinConfig::REMOTE_OUT1, OUTPUT);
+        pinMode(PinConfig::REMOTE_OUT2, OUTPUT);
+        digitalWrite(PinConfig::REMOTE_OUT1, HIGH);
+        digitalWrite(PinConfig::REMOTE_OUT2, HIGH);
     }
 
     /**

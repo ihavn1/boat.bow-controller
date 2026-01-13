@@ -52,12 +52,12 @@ The project uses **PlatformIO** for all build and development tasks.
 ## 3. Code Conventions & Patterns
 
 - **Modular Design**: Hardware control is separated into focused classes in `include/` directory:
-  - `pin_config.h` - All GPIO pin definitions as `constexpr` constants in `PinConfig` struct
+  - `pin_config.h` - All GPIO pin definitions as `constexpr` constants in `PinConfig` struct (includes reserved spare I/O pins)
   - `winch_controller.h` - Winch motor control with safety checks
   - `home_sensor.h` - Home position detection and state tracking
   - `automatic_mode_controller.h` - Automatic positioning controller
-  - `remote_control.h` - Physical remote input processing
-- **Relay Control Pattern**: Winch outputs use **active-LOW logic** - write `LOW` to activate, `HIGH` to deactivate. This is critical for safety: pins default to HIGH (inactive) on boot. Implemented in `WinchController` class.
+  - `remote_control.h` - Physical remote input processing and spare output initialization
+- **Relay Control Pattern**: Winch and spare outputs use **active-LOW logic** - write `LOW` to activate, `HIGH` to deactivate. This is critical for safety: pins default to HIGH (inactive) on boot. Implemented in `WinchController` class and spare outputs (GPIO 4, 5).
 - **State Management**: Minimal global state - only `pulse_count` (ISR access), `config_meters_per_pulse`, and SignalK pointer. Controller state is encapsulated in class instances (`winch_controller`, `home_sensor`, `auto_mode_controller`, `remote_control`).
 - **Interrupt-Driven Pulse Counting**: The `pulseISR()` function calls `remote_control->processInputs()` for physical remote polling and then `event_loop()->tick()`. All recurring tasks, like reading the pulse counter, are handled by the SensESP event loop, which is set up via `event_loop()->onRepeat()` in the `PulseCounter` constructor. Interrupts (`pulseISR`) handle high-frequency hardware events.
 - **Class Initialization Pattern**: Controllers are initialized in `setup()`:
