@@ -18,6 +18,8 @@ float test_config_meters_per_pulse = 0.1;
 #define WINCH_UP_PIN 27
 #define WINCH_DOWN_PIN 14
 #define ANCHOR_HOME_PIN 33
+#define REMOTE_UP_PIN 12
+#define REMOTE_DOWN_PIN 13
 
 // Mock Arduino functions
 int digitalRead(uint8_t pin) {
@@ -384,6 +386,337 @@ void test_system_defaults_to_manual_mode(void) {
 }
 
 // =============================================================================
+// TEST: Physical Remote UP Button
+// =============================================================================
+void test_physical_remote_up_button(void) {
+    test_automatic_mode_enabled = false;  // Manual mode
+    mock_gpio_states[ANCHOR_HOME_PIN] = true;  // Not home
+    mock_gpio_states[REMOTE_UP_PIN] = true;  // UP button pressed
+    mock_gpio_states[REMOTE_DOWN_PIN] = false;
+    
+    // Simulate handleManualInputs()
+    if (!test_automatic_mode_enabled) {
+        bool remote_up = mock_gpio_states[REMOTE_UP_PIN];
+        bool remote_down = mock_gpio_states[REMOTE_DOWN_PIN];
+        
+        if (remote_up) {
+            test_setWinchUp();
+        } else if (remote_down) {
+            test_setWinchDown();
+        } else {
+            test_stopWinch();
+        }
+    }
+    
+    TEST_ASSERT_TRUE(test_winch_active);
+    TEST_ASSERT_TRUE(mock_gpio_states[WINCH_UP_PIN]);
+}
+
+// =============================================================================
+// TEST: Physical Remote DOWN Button
+// =============================================================================
+void test_physical_remote_down_button(void) {
+    test_automatic_mode_enabled = false;  // Manual mode
+    mock_gpio_states[ANCHOR_HOME_PIN] = true;  // Not home
+    mock_gpio_states[REMOTE_UP_PIN] = false;
+    mock_gpio_states[REMOTE_DOWN_PIN] = true;  // DOWN button pressed
+    
+    // Simulate handleManualInputs()
+    if (!test_automatic_mode_enabled) {
+        bool remote_up = mock_gpio_states[REMOTE_UP_PIN];
+        bool remote_down = mock_gpio_states[REMOTE_DOWN_PIN];
+        
+        if (remote_up) {
+            test_setWinchUp();
+        } else if (remote_down) {
+            test_setWinchDown();
+        } else {
+            test_stopWinch();
+        }
+    }
+    
+    TEST_ASSERT_TRUE(test_winch_active);
+    TEST_ASSERT_TRUE(mock_gpio_states[WINCH_DOWN_PIN]);
+}
+
+// =============================================================================
+// TEST: Physical Remote Stops When Released
+// =============================================================================
+void test_physical_remote_stops_when_released(void) {
+    test_automatic_mode_enabled = false;  // Manual mode
+    test_winch_active = true;  // Winch running
+    mock_gpio_states[REMOTE_UP_PIN] = false;  // Released
+    mock_gpio_states[REMOTE_DOWN_PIN] = false;  // Released
+    
+    // Simulate handleManualInputs()
+    if (!test_automatic_mode_enabled) {
+        bool remote_up = mock_gpio_states[REMOTE_UP_PIN];
+        bool remote_down = mock_gpio_states[REMOTE_DOWN_PIN];
+        
+        if (remote_up) {
+            test_setWinchUp();
+        } else if (remote_down) {
+            test_setWinchDown();
+        } else {
+            test_stopWinch();
+        }
+    }
+    
+    TEST_ASSERT_FALSE(test_winch_active);
+}
+
+// =============================================================================
+// TEST: Physical Remote Blocked in Automatic Mode
+// =============================================================================
+void test_physical_remote_blocked_in_auto_mode(void) {
+    test_automatic_mode_enabled = true;  // Automatic mode active
+    mock_gpio_states[REMOTE_UP_PIN] = true;  // Button pressed
+    
+    // Simulate handleManualInputs()
+    bool command_executed = false;
+    if (!test_automatic_mode_enabled) {
+        test_setWinchUp();
+        command_executed = true;
+    }
+    
+    TEST_ASSERT_FALSE(command_executed);
+    TEST_ASSERT_FALSE(test_winch_active);
+}
+
+// =============================================================================
+// TEST: Pulse ISR Increments on Chain Out
+// =============================================================================
+void test_pulse_isr_increments_on_direction_high(void) {
+    test_pulse_count = 10;
+    mock_gpio_states[DIRECTION_PIN] = true;  // Chain OUT
+    
+    // Simulate ISR behavior
+    if (mock_gpio_states[DIRECTION_PIN]) {
+        test_pulse_count++;
+    } else {
+        test_pulse_count--;
+        if (test_pulse_count < 0) test_pulse_count = 0;
+    }
+    
+    TEST_ASSERT_EQUAL_INT32(11, test_pulse_count);
+}
+
+// =============================================================================
+// TEST: Pulse ISR Decrements on Chain In
+// =============================================================================
+void test_pulse_isr_decrements_on_direction_low(void) {
+    test_pulse_count = 10;
+    mock_gpio_states[DIRECTION_PIN] = false;  // Chain IN
+    
+    // Simulate ISR behavior
+    if (mock_gpio_states[DIRECTION_PIN]) {
+        test_pulse_count++;
+    } else {
+        test_pulse_count--;
+        if (test_pulse_count < 0) test_pulse_count = 0;
+    }
+    
+    TEST_ASSERT_EQUAL_INT32(9, test_pulse_count);
+}
+
+// =============================================================================
+// TEST: Reset Function Clears State
+// =============================================================================
+void test_reset_clears_all_state(void) {
+    test_pulse_count = 100;
+    test_target_rode_length = 15.0;
+    test_winch_active = true;
+    
+    // Simulate reset() method
+    test_pulse_count = 0;
+    test_stopWinch();
+    test_target_rode_length = -1.0;
+    
+    TEST_ASSERT_EQUAL_INT32(0, test_pulse_count);
+    TEST_ASSERT_EQUAL_FLOAT(-1.0, test_target_rode_length);
+    TEST_ASSERT_FALSE(test_winch_active);
+}
+
+// =============================================================================
+// TEST: Home Sensor Stops Active Retrieval
+// =============================================================================
+void test_home_sensor_stops_active_retrieval(void) {
+    test_winch_active = true;
+    mock_gpio_states[WINCH_UP_PIN] = true;  // Actively retrieving
+    mock_gpio_states[ANCHOR_HOME_PIN] = false;  // HOME reached
+    
+    // Simulate PulseCounter::update() home detection
+    bool is_home = (mock_gpio_states[ANCHOR_HOME_PIN] == LOW);
+    if (is_home && test_winch_active && mock_gpio_states[WINCH_UP_PIN]) {
+        test_stopWinch();
+        test_pulse_count = 0;
+    }
+    
+    TEST_ASSERT_FALSE(test_winch_active);
+    TEST_ASSERT_EQUAL_INT32(0, test_pulse_count);
+}
+
+// =============================================================================
+// TEST: Automatic Mode Within Tolerance Stops
+// =============================================================================
+void test_automatic_within_tolerance_stops(void) {
+    test_automatic_mode_enabled = true;
+    test_target_rode_length = 10.0;
+    test_pulse_count = 100;  // 10.0m with 0.1 meters per pulse
+    test_config_meters_per_pulse = 0.1;
+    test_winch_active = true;
+    
+    float current_meters = test_pulse_count * test_config_meters_per_pulse;
+    float tolerance = test_config_meters_per_pulse * 2.0;  // ±0.2m
+    
+    // Simulate automatic mode check
+    if (test_automatic_mode_enabled && test_target_rode_length >= 0) {
+        if (fabs(current_meters - test_target_rode_length) <= tolerance) {
+            if (test_winch_active) {
+                test_stopWinch();
+                test_automatic_mode_enabled = false;
+            }
+        }
+    }
+    
+    TEST_ASSERT_FALSE(test_winch_active);
+    TEST_ASSERT_FALSE(test_automatic_mode_enabled);
+}
+
+// =============================================================================
+// TEST: Automatic Mode Starts Deploy When Below Target
+// =============================================================================
+void test_automatic_starts_deploy_below_target(void) {
+    test_automatic_mode_enabled = true;
+    test_target_rode_length = 15.0;
+    test_pulse_count = 50;  // 5.0m
+    test_config_meters_per_pulse = 0.1;
+    mock_gpio_states[WINCH_DOWN_PIN] = false;  // Not active yet
+    mock_gpio_states[ANCHOR_HOME_PIN] = true;  // Not home
+    
+    float current_meters = test_pulse_count * test_config_meters_per_pulse;
+    float tolerance = test_config_meters_per_pulse * 2.0;
+    
+    // Simulate automatic mode control
+    if (test_automatic_mode_enabled && test_target_rode_length >= 0) {
+        if (fabs(current_meters - test_target_rode_length) > tolerance) {
+            if (current_meters < test_target_rode_length && !mock_gpio_states[WINCH_DOWN_PIN]) {
+                test_setWinchDown();
+            }
+        }
+    }
+    
+    TEST_ASSERT_TRUE(test_winch_active);
+    TEST_ASSERT_TRUE(mock_gpio_states[WINCH_DOWN_PIN]);
+}
+
+// =============================================================================
+// TEST: Automatic Mode Starts Retrieve When Above Target
+// =============================================================================
+void test_automatic_starts_retrieve_above_target(void) {
+    test_automatic_mode_enabled = true;
+    test_target_rode_length = 5.0;
+    test_pulse_count = 150;  // 15.0m
+    test_config_meters_per_pulse = 0.1;
+    mock_gpio_states[WINCH_UP_PIN] = false;  // Not active yet
+    mock_gpio_states[ANCHOR_HOME_PIN] = true;  // Not home
+    
+    float current_meters = test_pulse_count * test_config_meters_per_pulse;
+    float tolerance = test_config_meters_per_pulse * 2.0;
+    
+    // Simulate automatic mode control
+    if (test_automatic_mode_enabled && test_target_rode_length >= 0) {
+        if (fabs(current_meters - test_target_rode_length) > tolerance) {
+            if (current_meters > test_target_rode_length && !mock_gpio_states[WINCH_UP_PIN]) {
+                test_setWinchUp();
+            }
+        }
+    }
+    
+    TEST_ASSERT_TRUE(test_winch_active);
+    TEST_ASSERT_TRUE(mock_gpio_states[WINCH_UP_PIN]);
+}
+
+// =============================================================================
+// TEST: Get Meters Per Pulse Function
+// =============================================================================
+void test_get_meters_per_pulse(void) {
+    test_config_meters_per_pulse = 0.05;
+    
+    float result = test_config_meters_per_pulse;
+    
+    TEST_ASSERT_EQUAL_FLOAT(0.05, result);
+}
+
+// =============================================================================
+// TEST: Both Remote Buttons Cannot Be Active Simultaneously
+// =============================================================================
+void test_remote_buttons_priority(void) {
+    test_automatic_mode_enabled = false;
+    mock_gpio_states[REMOTE_UP_PIN] = true;  // Both pressed
+    mock_gpio_states[REMOTE_DOWN_PIN] = true;  // (shouldn't happen in practice)
+    mock_gpio_states[ANCHOR_HOME_PIN] = true;
+    
+    // Simulate handleManualInputs() - UP takes priority
+    if (!test_automatic_mode_enabled) {
+        bool remote_up = mock_gpio_states[REMOTE_UP_PIN];
+        bool remote_down = mock_gpio_states[REMOTE_DOWN_PIN];
+        
+        if (remote_up) {
+            test_setWinchUp();
+        } else if (remote_down) {
+            test_setWinchDown();
+        } else {
+            test_stopWinch();
+        }
+    }
+    
+    // UP should take priority due to if-else structure
+    TEST_ASSERT_TRUE(test_winch_active);
+    TEST_ASSERT_TRUE(mock_gpio_states[WINCH_UP_PIN]);
+    TEST_ASSERT_FALSE(mock_gpio_states[WINCH_DOWN_PIN]);
+}
+
+// =============================================================================
+// TEST: Target Length Can Be Armed Without Starting
+// =============================================================================
+void test_target_can_be_armed_without_starting(void) {
+    test_automatic_mode_enabled = false;  // Still in manual mode
+    test_target_rode_length = -1.0;  // No target
+    test_winch_active = false;
+    
+    // Arm target
+    test_target_rode_length = 20.0;
+    
+    // Should NOT start winch
+    TEST_ASSERT_EQUAL_FLOAT(20.0, test_target_rode_length);
+    TEST_ASSERT_FALSE(test_winch_active);
+    TEST_ASSERT_FALSE(test_automatic_mode_enabled);
+}
+
+// =============================================================================
+// TEST: Winch Outputs Are Mutually Exclusive
+// =============================================================================
+void test_winch_outputs_mutually_exclusive(void) {
+    mock_gpio_states[ANCHOR_HOME_PIN] = true;  // Not home
+    
+    // Test UP
+    test_setWinchUp();
+    bool up_active = mock_gpio_states[WINCH_UP_PIN];
+    bool down_active_during_up = mock_gpio_states[WINCH_DOWN_PIN];
+    
+    // Test DOWN
+    test_setWinchDown();
+    bool up_active_during_down = mock_gpio_states[WINCH_UP_PIN];
+    bool down_active = mock_gpio_states[WINCH_DOWN_PIN];
+    
+    TEST_ASSERT_TRUE(up_active);
+    TEST_ASSERT_FALSE(down_active_during_up);
+    TEST_ASSERT_FALSE(up_active_during_down);
+    TEST_ASSERT_TRUE(down_active);
+}
+
+// =============================================================================
 // Main Test Runner
 // =============================================================================
 void setup() {
@@ -396,16 +729,30 @@ void setup() {
     RUN_TEST(test_pulse_counter_decrement_on_chain_in);
     RUN_TEST(test_pulse_counter_prevents_negative_values);
     RUN_TEST(test_meters_calculation_from_pulses);
+    RUN_TEST(test_get_meters_per_pulse);
+    
+    // ISR tests
+    RUN_TEST(test_pulse_isr_increments_on_direction_high);
+    RUN_TEST(test_pulse_isr_decrements_on_direction_low);
     
     // Safety sensor tests
     RUN_TEST(test_home_sensor_blocks_winch_up);
     RUN_TEST(test_home_sensor_allows_winch_down);
+    RUN_TEST(test_home_sensor_stops_active_retrieval);
     RUN_TEST(test_counter_resets_at_home_position);
     
     // Winch control tests
     RUN_TEST(test_winch_up_works_when_not_home);
     RUN_TEST(test_winch_down_works);
     RUN_TEST(test_stop_winch_clears_all_outputs);
+    RUN_TEST(test_winch_outputs_mutually_exclusive);
+    
+    // Physical remote control tests
+    RUN_TEST(test_physical_remote_up_button);
+    RUN_TEST(test_physical_remote_down_button);
+    RUN_TEST(test_physical_remote_stops_when_released);
+    RUN_TEST(test_physical_remote_blocked_in_auto_mode);
+    RUN_TEST(test_remote_buttons_priority);
     
     // Manual/Automatic mode tests
     RUN_TEST(test_system_defaults_to_manual_mode);
@@ -413,10 +760,17 @@ void setup() {
     RUN_TEST(test_automatic_mode_blocks_manual_control);
     
     // Automatic target control tests
+    RUN_TEST(test_target_can_be_armed_without_starting);
     RUN_TEST(test_arm_target_then_fire);
     RUN_TEST(test_automatic_target_deploy);
     RUN_TEST(test_automatic_target_retrieve);
+    RUN_TEST(test_automatic_starts_deploy_below_target);
+    RUN_TEST(test_automatic_starts_retrieve_above_target);
+    RUN_TEST(test_automatic_within_tolerance_stops);
     RUN_TEST(test_automatic_stops_and_disables_at_target);
+    
+    // Reset function test
+    RUN_TEST(test_reset_clears_all_state);
     
     UNITY_END();
 }

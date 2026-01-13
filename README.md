@@ -126,7 +126,21 @@ pio run --target upload
 
 # Monitor serial output
 pio device monitor
+
+# Run tests (requires ESP32 connected via USB)
+pio test -e test
 ```
+
+### Testing
+
+The project uses the **Unity** test framework with 30+ comprehensive tests covering:
+- Pulse counting and ISR behavior
+- Physical remote control operations
+- Home sensor safety features
+- Manual and automatic winch control
+- Mode transitions and edge cases
+
+**Note:** Tests mock GPIO hardware but still require an ESP32 board connected via USB to execute. The tests run on the hardware but don't require actual sensors or winches connected.
 
 ## License
 

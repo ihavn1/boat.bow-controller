@@ -12,9 +12,10 @@ This project is an ESP32-based anchor chain counter and windlass controller. It'
   - **Transforms** (e.g., `LambdaTransform`) process data flowing through the system.
   - **Consumers** (e.g., `SKOutputFloat`, `LambdaConsumer`) are the final destination for data, often sending it to the SignalK server or triggering actions.
 - **SignalK Integration**: The device communicates with a SignalK server for remote control and monitoring. Key input (command) and output (status) paths are defined in `src/main.cpp` and documented in `README.md`. All interactions with the outside world happen via these SignalK paths.
-- **Control Logic**: The system has two primary modes:
-  1.  **Manual Mode**: Direct control of the winch via `navigation.anchor.manualControl`.
-  2.  **Automatic Mode**: An "arm-and-fire" system. A target length is first "armed" (`navigation.anchor.targetRodeCommand`), and then automatic control is "fired" (`navigation.anchor.automaticModeCommand`). The logic inside the `PulseCounter::update()` method then manages the winch to reach the target.
+- **Control Logic**: The system has three control modes that coexist:
+  1.  **Manual Mode** (SignalK): Remote control via `navigation.anchor.manualControl` (1=UP, 0=STOP, -1=DOWN).
+  2.  **Physical Remote**: Direct hardware buttons checked in `handleManualInputs()` every loop iteration. These STOP the winch when released, overriding SignalK commands.
+  3.  **Automatic Mode**: An "arm-and-fire" system. A target length is first "armed" (`navigation.anchor.targetRodeCommand`), and then automatic control is "fired" (`navigation.anchor.automaticModeCommand`). The logic inside the `PulseCounter::update()` method then manages the winch to reach the target. Automatic mode blocks both manual modes.
 
 ## 2. Developer Workflows
 
@@ -38,14 +39,19 @@ The project uses **PlatformIO** for all build and development tasks.
     ```bash
     pio test
     ```
+  - **Testing Pattern**: Tests in `test/test_anchor_counter.cpp` mock the entire Arduino hardware layer. Mock arrays (`mock_gpio_states[]`, `mock_gpio_modes[]`) simulate pin states. Test functions replicate core logic from `main.cpp` (e.g., `test_setWinchUp()`, `test_stopWinch()`) to verify behavior without hardware.
+  - **Test Structure**: Each test follows a clear naming pattern (`test_<feature>_<scenario>`) and uses Unity assertions (`TEST_ASSERT_TRUE`, `TEST_ASSERT_EQUAL_INT32`, etc.). Tests cover: pulse counting (increment/decrement), home sensor logic, manual/automatic mode control, arm-and-fire sequence, and target reaching.
 
 ## 3. Code Conventions & Patterns
 
 - **Hardware Abstraction**: All GPIO pin definitions are at the top of `src/main.cpp`. All hardware interaction (reading sensors, controlling relays) is centralized in this file.
+- **Relay Control Pattern**: Winch outputs (`WINCH_UP_PIN`, `WINCH_DOWN_PIN`) use **active-LOW logic** - write `LOW` to activate, `HIGH` to deactivate. This is critical for safety: pins default to HIGH (inactive) on boot.
 - **State Management**: Global variables in `main.cpp` (e.g., `pulse_count`, `automatic_mode_enabled`) hold the primary state. The `PulseCounter` class contains the core logic for reading sensors and implementing the automatic control loop.
+- **Interrupt-Driven Pulse Counting**: The `pulseISR()` function is attached to `PULSE_INPUT_PIN` and increments/decrements `pulse_count` based on `DIRECTION_PIN` state. The ISR includes a 10µs delay for signal stabilization and prevents negative pulse counts.
 - **Configuration**: User-facing configuration (like calibration values) is exposed through the SensESP web UI. This is done by creating `ConfigItem` objects in `setup()`, for example, the `meters_per_pulse` setting.
 - **SignalK Communication**:
   - To send data to SignalK, connect a producer to an `SKOutput` class (e.g., `SKOutputFloat`).
   - To receive data from SignalK, create an `SKListener` (e.g., `IntSKListener`) and connect it to a `LambdaConsumer` or `LambdaTransform` to process the incoming value.
-- **Asynchronous Operations**: The main `loop()` is minimal. All recurring tasks, like reading the pulse counter, are handled by the SensESP event loop, which is set up via `event_loop()->onRepeat()` in the `PulseCounter` constructor. Interrupts (`pulseISR`) handle high-frequency hardware events.
+- **Asynchronous Operations**: The main `loop()` is minimal - it only calls `handleManualInputs()` for physical remote polling and then `event_loop()->tick()`. All recurring tasks, like reading the pulse counter, are handled by the SensESP event loop, which is set up via `event_loop()->onRepeat()` in the `PulseCounter` constructor. Interrupts (`pulseISR`) handle high-frequency hardware events.
+- **Helper Modules**: The `include/` directory contains unused helper modules (`ah_integrator.h`, `battery_helper.h`, `onewire_helper.h`) for future expansion. These are not currently compiled or used in the anchor counter application.
 ````
