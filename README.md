@@ -50,8 +50,8 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 
 1. **Hardware Setup**: Connect sensors and relays according to GPIO pin configuration
 2. **Flash Firmware**: Upload code to ESP32 using PlatformIO
-3. **Configure WiFi**: Connect to `bow-sensors` access point on first boot
-4. **Calibrate**: Set meters-per-pulse value via web interface at `http://bow-sensors.local/`
+3. **Configure WiFi**: Connect to `bow-controller` access point on first boot
+4. **Calibrate**: Set meters-per-pulse value via web interface at `http://bow-controller.local/`
 5. **SignalK Integration**: Device automatically connects and publishes/subscribes to SignalK paths
 
 ## SignalK Paths

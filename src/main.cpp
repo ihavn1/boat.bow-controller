@@ -107,7 +107,7 @@ void setup()
     // Create the global SensESPApp() object
     SensESPAppBuilder builder;
     sensesp_app = builder
-                      .set_hostname("bow-sensors")
+                      .set_hostname("bow-controller")
                       ->get_app();
 
     // Initialize hardware controllers

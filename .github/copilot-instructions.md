@@ -1,6 +1,6 @@
 # Copilot Instructions
 
-This document provides guidance for AI agents to effectively contribute to the `boat-bowsensors` codebase.
+This document provides guidance for AI agents to effectively contribute to the `boat.bow-controller` codebase.
 
 ## 1. The Big Picture: Architecture & Core Concepts
 
