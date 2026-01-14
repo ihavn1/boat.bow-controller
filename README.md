@@ -146,8 +146,8 @@ The project uses the **Unity** test framework with 30+ comprehensive tests cover
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Author
 
-[Add your name/contact here]" 
+ihavn1" 
