@@ -780,3 +780,14 @@ void setup() {
 void loop() {
     // Nothing here
 }
+
+// Native platform entry point
+#ifdef ARDUINO
+// For Arduino/ESP32: setup() and loop() are called by the framework
+#else
+// For native testing: provide a main() function
+int main(int argc, char **argv) {
+    setup();
+    return 0;
+}
+#endif
