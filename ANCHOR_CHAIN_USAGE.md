@@ -42,6 +42,11 @@ The recommended workflow is to **arm** the target first, then **fire** when read
   }]
 }
 ```
+    ### OTA Firmware Updates (optional)
+    1. Copy `src/secrets.example.h` to `src/secrets.h`.
+    2. Set `AP_PASSWORD` and `OTA_PASSWORD` (AP password must be at least 8 characters).
+    3. Upload over the network (device must be reachable):
+
 
 This sets the target to 15 meters but doesn't start the windlass. The target is "armed" and ready.
 
@@ -262,6 +267,16 @@ http://bow-controller.local/
 ```
 
 Look for the "Meters per Pulse" configuration item to adjust the value based on your windlass gypsy diameter and pulse sensor.
+
+### OTA Firmware Updates (optional)
+1. Copy `src/secrets.example.h` to `src/secrets.h`.
+2. Set `AP_PASSWORD` and `OTA_PASSWORD` (AP password must be at least 8 characters).
+3. Upload over the network (device must be reachable):
+
+```bash
+pio run --target upload --upload-port bow-controller.local
+```
+
 ## Safety Features
 
 1. **Manual mode by default** - System starts in manual mode; automatic control must be explicitly enabled

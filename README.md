@@ -53,6 +53,7 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 3. **Configure WiFi**: Connect to `bow-controller` access point on first boot
 4. **Calibrate**: Set meters-per-pulse value via web interface at `http://bow-controller.local/`
 5. **SignalK Integration**: Device automatically connects and publishes/subscribes to SignalK paths
+6. **OTA Setup (optional)**: Copy `src/secrets.example.h` to `src/secrets.h` and set `AP_PASSWORD` and `OTA_PASSWORD`
 
 ## SignalK Paths
 
@@ -125,6 +126,9 @@ pio run
 
 # Upload to device
 pio run --target upload
+
+# Upload OTA (device must be on the network)
+pio run --target upload --upload-port bow-controller.local
 
 # Monitor serial output
 pio device monitor

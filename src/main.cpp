@@ -14,6 +14,16 @@
 #include "automatic_mode_controller.h"
 #include "remote_control.h"
 
+#include "secrets.h"
+
+#ifndef AP_PASSWORD
+#error "AP_PASSWORD not defined. Define it in src/secrets.h."
+#endif
+
+#ifndef OTA_PASSWORD
+#error "OTA_PASSWORD not defined. Define it in src/secrets.h."
+#endif
+
 using namespace sensesp;
 
 // Global system components
@@ -107,7 +117,9 @@ void setup()
     // Create the global SensESPApp() object
     SensESPAppBuilder builder;
     sensesp_app = builder
-                      .set_hostname("bow-controller")
+                      .set_wifi_access_point("bow-controller", AP_PASSWORD)
+                      ->set_hostname("bow-controller")
+                      ->enable_ota(OTA_PASSWORD)
                       ->get_app();
 
     // Initialize hardware controllers
