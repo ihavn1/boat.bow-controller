@@ -1,12 +1,16 @@
 #include <memory>
+#include <ArduinoJson.h>
+#include <SPIFFS.h>
 #include "sensesp_app_builder.h"
 #include "sensesp/signalk/signalk_output.h"
+#include "sensesp/signalk/signalk_ws_client.h"
 #include "sensesp/ui/config_item.h"
 #include "sensesp/ui/ui_controls.h"
 #include "sensesp/sensors/sensor.h"
 #include "sensesp/signalk/signalk_value_listener.h"
 #include "sensesp/transforms/lambda_transform.h"
 #include "sensesp/system/valueconsumer.h"
+#include "sensesp/system/hash.h"
 
 #include "pin_config.h"
 #include "winch_controller.h"
@@ -26,6 +30,78 @@
 
 using namespace sensesp;
 
+namespace {
+    bool findConfigFile(const String& config_path, String& filename) {
+        const String hash_path = String("/") + Base64Sha1(config_path);
+        const String paths_to_check[] = {hash_path, hash_path + "\n"};
+
+        for (const auto& path : paths_to_check) {
+            if (SPIFFS.exists(path)) {
+                filename = path;
+                return true;
+            }
+        }
+
+        if (config_path.length() < 32 && SPIFFS.exists(config_path)) {
+            filename = config_path;
+            return true;
+        }
+
+        return false;
+    }
+
+    void updateApPasswordIfDefault(const char* ap_password) {
+        const String config_path = "/System/WiFi Settings";
+        String filename;
+        if (!findConfigFile(config_path, filename)) {
+            return;
+        }
+
+        File file = SPIFFS.open(filename, "r");
+        if (!file) {
+            return;
+        }
+
+        DynamicJsonDocument doc(1024);
+        auto error = deserializeJson(doc, file);
+        file.close();
+        if (error) {
+            return;
+        }
+
+        bool updated = false;
+        const String default_password = "thisisfine";
+
+        if (doc["apSettings"].is<JsonVariant>()) {
+            JsonObject ap_settings = doc["apSettings"].as<JsonObject>();
+            String current = ap_settings["password"] | "";
+            if (current.length() == 0 || current == default_password) {
+                ap_settings["password"] = ap_password;
+                updated = true;
+            }
+        } else if (doc["ap_mode"].is<String>()) {
+            String ap_mode = doc["ap_mode"].as<String>();
+            String current = doc["password"] | "";
+            if ((ap_mode == "Access Point" || ap_mode == "Hotspot") &&
+                (current.length() == 0 || current == default_password)) {
+                doc["password"] = ap_password;
+                updated = true;
+            }
+        }
+
+        if (!updated) {
+            return;
+        }
+
+        File out = SPIFFS.open(filename, "w");
+        if (!out) {
+            return;
+        }
+        serializeJson(doc, out);
+        out.close();
+    }
+}
+
 // Global system components
 WinchController winch_controller;
 HomeSensor home_sensor;
@@ -36,6 +112,24 @@ RemoteControl* remote_control = nullptr;
 volatile long pulse_count = 0;              // Bidirectional pulse counter (ISR access)
 float config_meters_per_pulse = 0.01;       // Configurable conversion factor
 SKOutputFloat* auto_mode_output_ptr = nullptr;  // For updating auto mode status
+SKOutputFloat* target_output_ptr = nullptr;     // For updating target rode status
+bool commands_allowed = false;              // Commands blocked until SignalK connection stable for 5s
+unsigned long connection_stable_time = 0;   // Time when we can allow commands
+
+// Helper function to cleanly disable automatic mode from any source
+void disableAutoMode() {
+    if (auto_mode_controller && auto_mode_controller->isEnabled()) {
+        auto_mode_controller->setEnabled(false);
+        auto_mode_controller->setTargetLength(-1.0f);
+        if (auto_mode_output_ptr) {
+            auto_mode_output_ptr->set_input(0.0f);
+        }
+        if (target_output_ptr) {
+            target_output_ptr->set_input(-1.0f);
+        }
+        debugD("Automatic mode disabled");
+    }
+}
 
 // Interrupt Service Routine - Pulse Counter with Direction Sensing
 void IRAM_ATTR pulseISR() {
@@ -85,6 +179,8 @@ public:
             if (home_sensor.justArrived()) {
                 pulse_count = 0;
                 debugD("Anchor at home - counter reset");
+                // Disable auto mode on home arrival (for auto-home feature)
+                disableAutoMode();
             }
         }
         
@@ -111,11 +207,25 @@ public:
 
 void setup()
 {
+    // Commands blocked by default until SignalK connection is stable
+    
+    // SAFETY FIRST: Set all active-LOW outputs to inactive state immediately
+    // Active-LOW relays: HIGH = inactive, LOW = active
+    pinMode(PinConfig::WINCH_UP, OUTPUT);
+    pinMode(PinConfig::WINCH_DOWN, OUTPUT);
+    pinMode(PinConfig::REMOTE_OUT1, OUTPUT);
+    pinMode(PinConfig::REMOTE_OUT2, OUTPUT);
+    digitalWrite(PinConfig::WINCH_UP, HIGH);
+    digitalWrite(PinConfig::WINCH_DOWN, HIGH);
+    digitalWrite(PinConfig::REMOTE_OUT1, HIGH);
+    digitalWrite(PinConfig::REMOTE_OUT2, HIGH);
+    
     // put your setup code here, to run once:
     SetupLogging();
 
     // Create the global SensESPApp() object
     SensESPAppBuilder builder;
+    updateApPasswordIfDefault(AP_PASSWORD);
     sensesp_app = builder
                       .set_wifi_access_point("bow-controller", AP_PASSWORD)
                       ->set_hostname("bow-controller")
@@ -127,7 +237,7 @@ void setup()
     home_sensor.initialize();
     
     // Initialize automatic mode controller
-    auto_mode_controller = new AutomaticModeController(winch_controller);
+    auto_mode_controller = new AutomaticModeController(winch_controller, home_sensor);
     auto_mode_controller->setTolerance(config_meters_per_pulse * 2.0);
     
     // Initialize remote control
@@ -155,85 +265,146 @@ void setup()
     rode_output->set_metadata(new SKMetadata("m"));  // Set units to meters
     pulse_counter->connect_to(rode_output);
 
-    // Add SignalK value listener to reset the counter (receives PUT via delta)
+    // Add SignalK value listener to reset the counter (self-clearing command)
     auto* reset_listener = new BoolSKListener("navigation.anchor.resetRode");
-    reset_listener->connect_to(new LambdaConsumer<bool>([pulse_counter](bool reset_signal) {
+    auto* reset_output = new SKOutputBool("navigation.anchor.resetRode", "/reset_rode/sk_path");
+    reset_output->set_input(false);  // Clear command on boot
+    reset_listener->connect_to(new LambdaConsumer<bool>([pulse_counter, reset_output](bool reset_signal) {
+        if (!commands_allowed) return;  // Block until connection stable
         if (reset_signal) {
             pulse_counter->reset();
+            debugD("Reset command triggered");
+            // Clear command immediately to allow retriggering
+            reset_output->set_input(false);
         }
     }));
 
     // Manual Windlass Control: Single path with three states (1=UP, 0=STOP, -1=DOWN)
+    // Manual control overrides automatic mode
     auto* manual_control_output = new SKOutputInt("navigation.anchor.manualControlStatus", "/manual_control_status/sk_path");
+    manual_control_output->set_input(0);  // Initialize to STOP on boot
     auto* manual_control_listener = new IntSKListener("navigation.anchor.manualControl");
     
     manual_control_listener->connect_to(new LambdaTransform<int, int>([](int command) {
-        if (!auto_mode_controller->isEnabled()) {
-            if (command == 1) {
-                winch_controller.moveUp();
-            } else if (command == -1) {
-                winch_controller.moveDown();
-            } else {
-                winch_controller.stop();
-            }
-            debugD("Manual control: %s", command == 1 ? "UP" : (command == -1 ? "DOWN" : "STOP"));
+        if (!commands_allowed) return 0;  // Block until connection stable
+        // Manual control always overrides automatic mode
+        disableAutoMode();
+        
+        if (command == 1) {
+            winch_controller.moveUp();
+        } else if (command == -1) {
+            winch_controller.moveDown();
         } else {
-            debugD("Manual control blocked - automatic mode active");
+            winch_controller.stop();
         }
+        debugD("Manual control: %s", command == 1 ? "UP" : (command == -1 ? "DOWN" : "STOP"));
         return command;
     }))->connect_to(manual_control_output);
 
     // Automatic Mode Control: Enable/disable automatic windlass control
     // Using FloatSKListener (value > 0.5 = enable, <= 0.5 = disable)
     auto* auto_mode_output = new SKOutputFloat("navigation.anchor.automaticModeStatus", "/automatic_mode_status/sk_path");
+    auto_mode_output_ptr = auto_mode_output;  // Store pointer for global helper function
     
-    // Set callback to update SignalK when target is reached
-    auto_mode_controller->setOnTargetReachedCallback([auto_mode_output]() {
-        if (auto_mode_output) {
-            auto_mode_output->set_input(0.0);
-        }
-    });
+    // Target Rode Length: Arm target for automatic mode
+    auto* target_output = new SKOutputFloat("navigation.anchor.targetRodeStatus", "/target_rode_status/sk_path");
+    target_output_ptr = target_output;  // Store pointer for global helper function
+    target_output->set_metadata(new SKMetadata("m"));  // Set units to meters
+    
+    // Enable remote control to override automatic mode
+    remote_control->setAutoModeController(auto_mode_controller);
+    remote_control->setAutoModeOutput(auto_mode_output);
+
+    // Ensure auto mode starts disabled on boot and target is cleared
+    disableAutoMode();
     
     auto* auto_mode_listener = new FloatSKListener("navigation.anchor.automaticModeCommand");
     
     auto_mode_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float value) {
+        if (!commands_allowed) return value;  // Block until connection stable
         bool enable = (value > 0.5);
-        auto_mode_controller->setEnabled(enable);
         
-        if (enable) {
-            debugD("Automatic mode ENABLED");
-            // If target already armed, trigger immediate position update
-            if (auto_mode_controller->getTargetLength() >= 0) {
-                float current = pulse_count * pulse_counter->get_meters_per_pulse();
-                debugD("Target armed: %.2f m, current: %.2f m", 
-                       auto_mode_controller->getTargetLength(), current);
-                auto_mode_controller->update(current);
+        if (enable != auto_mode_controller->isEnabled()) {
+            if (enable) {
+                auto_mode_controller->setEnabled(true);
+                debugD("Automatic mode ENABLED");
+                if (auto_mode_controller->getTargetLength() >= 0) {
+                    float current = pulse_count * pulse_counter->get_meters_per_pulse();
+                    debugD("Target armed: %.2f m, current: %.2f m", 
+                           auto_mode_controller->getTargetLength(), current);
+                    auto_mode_controller->update(current);
+                }
+            } else {
+                debugD("Automatic mode DISABLED");
+                disableAutoMode();
             }
-        } else {
-            debugD("Automatic mode DISABLED");
-            winch_controller.stop();
         }
         return value;
     }))->connect_to(auto_mode_output);
 
-    // Target Rode Length: Arm target for automatic mode
-    auto* target_output = new SKOutputFloat("navigation.anchor.targetRodeStatus", "/target_rode_status/sk_path");
-    target_output->set_metadata(new SKMetadata("m"));  // Set units to meters
     auto* target_listener = new FloatSKListener("navigation.anchor.targetRodeCommand");
     
     target_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float target) {
-        auto_mode_controller->setTargetLength(target);
-        float current = pulse_count * pulse_counter->get_meters_per_pulse();
-        
-        debugD("Target armed: %.2f m (current: %.2f m)", target, current);
-        
-        // Start winch immediately if automatic mode already enabled
-        if (auto_mode_controller->isEnabled() && target >= 0) {
-            auto_mode_controller->update(current);
+        if (!commands_allowed) return target;  // Block until connection stable
+        // Accept any valid target (including re-sending same value)
+        if (target >= 0) {
+            auto_mode_controller->setTargetLength(target);
+            float current = pulse_count * pulse_counter->get_meters_per_pulse();
+            
+            debugD("Target armed: %.2f m (current: %.2f m)", target, current);
+            
+            // Start winch immediately if automatic mode already enabled
+            if (auto_mode_controller->isEnabled()) {
+                auto_mode_controller->update(current);
+            }
         }
-        
         return target;
     }))->connect_to(target_output);
+
+    // Home Command: Arm target to 0.0m (auto-home) - self-clearing
+    auto* home_listener = new BoolSKListener("navigation.anchor.homeCommand");
+    auto* home_output = new SKOutputBool("navigation.anchor.homeCommand", "/home_command/sk_path");
+    home_output->set_input(false);  // Clear command on boot
+    home_listener->connect_to(new LambdaConsumer<bool>([home_output](bool go_home) {
+        if (!commands_allowed) return;  // Block until connection stable
+        if (go_home) {
+            if (winch_controller.isActive() && !auto_mode_controller->isEnabled()) {
+                debugD("Home command blocked - manual control active");
+            } else {
+                auto_mode_controller->setTargetLength(0.0f);
+                target_output_ptr->set_input(0.0f);
+                debugD("Home command armed: target set to 0.0 m");
+            }
+            // Clear command immediately to allow retriggering
+            home_output->set_input(false);
+        }
+    }));
+
+    // Monitor SignalK connection state - check every 100ms for fast response
+    sensesp_app->get_event_loop()->onRepeat(100, []() {
+        static bool was_connected = false;
+        auto ws_client = sensesp_app->get_ws_client();
+        bool is_connected = ws_client ? ws_client->is_connected() : false;
+        
+        if (was_connected && !is_connected) {
+            // Connection lost - immediately stop all automatic operations and block commands
+            debugD("SignalK connection lost - stopping automatic operations");
+            disableAutoMode();
+            winch_controller.stop();
+            commands_allowed = false;
+            connection_stable_time = 0;
+        } else if (!was_connected && is_connected) {
+            // Connection established - wait 5 seconds before allowing commands
+            connection_stable_time = millis() + 5000;
+            commands_allowed = false;
+            debugD("SignalK connected - commands blocked for 5 seconds");
+        } else if (is_connected && !commands_allowed && connection_stable_time > 0 && millis() >= connection_stable_time) {
+            // Connection has been stable for 5 seconds - allow commands
+            commands_allowed = true;
+            debugD("SignalK connection stable - commands now allowed");
+        }
+        was_connected = is_connected;
+    });
 
     debugD("=== Anchor Chain Counter System ===");
     debugD("Pulse input: GPIO %d, Direction: GPIO %d", PinConfig::PULSE_INPUT, PinConfig::DIRECTION);
@@ -241,13 +412,14 @@ void setup()
     debugD("Home sensor: GPIO %d", PinConfig::ANCHOR_HOME);
     debugD("Remote outputs: OUT1=GPIO %d, OUT2=GPIO %d", PinConfig::REMOTE_OUT1, PinConfig::REMOTE_OUT2);
     debugD("Mode: MANUAL (automatic disabled)");
+    debugD("Startup complete - commands blocked until SignalK connection stable");
 }
 
 void loop()
 {
     // Process physical remote control inputs
     if (remote_control) {
-        remote_control->processInputs(auto_mode_controller->isEnabled());
+        remote_control->processInputs();
     }
     
     static auto event_loop = sensesp_app->get_event_loop();

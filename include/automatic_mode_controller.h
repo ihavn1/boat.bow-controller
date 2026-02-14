@@ -1,6 +1,7 @@
 #pragma once
 
 #include "winch_controller.h"
+#include "home_sensor.h"
 
 /**
  * @file automatic_mode_controller.h
@@ -20,9 +21,10 @@ public:
     /**
      * @brief Construct automatic mode controller
      * @param winch Reference to winch controller (dependency injection)
+     * @param home_sensor Reference to home sensor for auto-home safety
      */
-    AutomaticModeController(WinchController& winch) 
-        : winch_(winch), enabled_(false), target_length_(-1.0f), tolerance_(0.2f) {}
+    AutomaticModeController(WinchController& winch, HomeSensor& home_sensor) 
+        : winch_(winch), home_sensor_(home_sensor), enabled_(false), target_length_(-1.0f), tolerance_(0.2f) {}
 
     /**
      * @brief Enable or disable automatic mode
@@ -64,6 +66,7 @@ public:
      * @param current_length Current rode length in meters
      * 
      * This method implements the control loop:
+     * - If target is 0.0 (auto-home): only move up, stop is handled by home sensor
      * - If at target (within tolerance): stop winch, disable automatic mode
      * - If below target: deploy more chain (move down)
      * - If above target: retrieve chain (move up)
@@ -75,17 +78,27 @@ public:
 
         float error = current_length - target_length_;
 
+        // Special case: auto-home (target = 0.0) stops on home sensor, not distance
+        if (target_length_ == 0.0f) {
+            // Check home sensor directly - don't rely on pulse count
+            if (home_sensor_.isAtHome()) {
+                // At home - stop and don't try to move
+                return;
+            }
+            // Only control direction - home sensor will stop the winch
+            if (!winch_.isMovingUp()) {
+                winch_.moveUp();
+            }
+            return;
+        }
+
+        // Normal distance-based control for non-zero targets
         if (fabs(error) <= tolerance_) {
             // Target reached
             if (winch_.isActive()) {
                 winch_.stop();
                 enabled_ = false;
                 debugD("Target %.2f m reached - automatic mode disabled", current_length);
-                
-                // Notify callback if set
-                if (on_target_reached_) {
-                    on_target_reached_();
-                }
             }
         } else if (error < 0) {
             // Too short - need to deploy more
@@ -100,18 +113,10 @@ public:
         }
     }
 
-    /**
-     * @brief Set callback function to invoke when target is reached
-     * @param callback Function to call when automatic mode completes
-     */
-    void setOnTargetReachedCallback(std::function<void()> callback) {
-        on_target_reached_ = callback;
-    }
-
 private:
     WinchController& winch_;           ///< Reference to winch controller
+    HomeSensor& home_sensor_;          ///< Reference to home sensor
     bool enabled_;                     ///< True if automatic mode is active
     float target_length_;              ///< Target rode length in meters
     float tolerance_;                  ///< Positioning tolerance in meters
-    std::function<void()> on_target_reached_;  ///< Callback when target reached
 };

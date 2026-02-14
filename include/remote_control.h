@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include "pin_config.h"
 #include "winch_controller.h"
+#include "automatic_mode_controller.h"
+#include "sensesp/signalk/signalk_output.h"
+
+using namespace sensesp;
 
 /**
  * @file remote_control.h
@@ -12,7 +16,7 @@
  * The remote operates in a "deadman switch" mode:
  * - Winch runs only while a button is held down
  * - Winch stops immediately when button is released
- * - Remote is blocked during automatic mode operation
+ * - Remote overrides automatic mode (disables it immediately on button press)
  * 
  * Hardware: Remote buttons are active-HIGH (read HIGH when pressed)
  */
@@ -21,8 +25,15 @@ public:
     /**
      * @brief Construct remote control handler
      * @param winch Reference to winch controller (dependency injection)
+     * @param auto_mode_controller Pointer to automatic mode controller (can be nullptr)
+     * @param auto_mode_output_ptr Pointer to auto mode SignalK output (can be nullptr)
      */
-    RemoteControl(WinchController& winch) : winch_(winch) {}
+    RemoteControl(WinchController& winch, 
+                  AutomaticModeController* auto_mode_controller = nullptr,
+                  SKOutputFloat* auto_mode_output_ptr = nullptr) 
+        : winch_(winch), 
+          auto_mode_controller_(auto_mode_controller),
+          auto_mode_output_ptr_(auto_mode_output_ptr) {}
 
     /**
      * @brief Initialize remote control GPIO pins
@@ -43,36 +54,65 @@ public:
 
     /**
      * @brief Process remote control inputs (call every loop iteration)
-     * @param automatic_mode_active true if automatic mode is currently active
-     * @return true if remote took control, false if blocked or inactive
+     * @return true if remote is actively controlling the winch, false if not
      * 
-     * Behavior:
-     * - If automatic mode is active: remote is blocked (returns false)
-     * - If UP button pressed: move winch up
-     * - If DOWN button pressed: move winch down
-     * - If neither pressed: stop winch (deadman switch behavior)
+     * Behavior (deadman switch):
+     * - If UP button pressed: disable auto mode, move winch up, return true
+     * - If DOWN button pressed: disable auto mode, move winch down, return true
+     * - If neither pressed and remote was controlling: stop winch
+     * - If neither pressed and remote was NOT controlling (auto mode active): do nothing
      */
-    bool processInputs(bool automatic_mode_active) {
-        if (automatic_mode_active) {
-            return false;  // Don't allow remote override during automatic mode
-        }
-
+    bool processInputs() {
         bool up_pressed = digitalRead(PinConfig::REMOTE_UP) == HIGH;
         bool down_pressed = digitalRead(PinConfig::REMOTE_DOWN) == HIGH;
+        bool button_active = up_pressed || down_pressed;
+
+        // Remote button press overrides automatic mode (declared extern in main.cpp)
+        extern void disableAutoMode();
+        if (button_active && auto_mode_controller_) {
+            if (auto_mode_controller_->isEnabled()) {
+                disableAutoMode();
+            }
+        }
 
         if (up_pressed) {
             winch_.moveUp();
+            remote_active_ = true;
             return true;
         } else if (down_pressed) {
             winch_.moveDown();
+            remote_active_ = true;
             return true;
-        } else {
-            // Neither button pressed - stop winch
+        } else if (remote_active_) {
+            // Button released - only stop if remote was actively controlling
             winch_.stop();
+            remote_active_ = false;
             return true;
         }
+        // Neither button pressed and remote was not controlling - do nothing
+        return false;
+    }
+
+    /**
+     * @brief Set the automatic mode controller pointer
+     * @param auto_mode_controller Pointer to automatic mode controller
+     */
+    void setAutoModeController(AutomaticModeController* auto_mode_controller) {
+        auto_mode_controller_ = auto_mode_controller;
+    }
+
+    /**
+     * @brief Set the auto mode SignalK output pointer
+     * @param auto_mode_output_ptr Pointer to auto mode SignalK output
+     */
+    void setAutoModeOutput(SKOutputFloat* auto_mode_output_ptr) {
+        auto_mode_output_ptr_ = auto_mode_output_ptr;
     }
 
 private:
     WinchController& winch_;  ///< Reference to winch controller
+    AutomaticModeController* auto_mode_controller_;  ///< Pointer to auto mode controller
+    SKOutputFloat* auto_mode_output_ptr_;  ///< Pointer to auto mode SignalK output
+    bool remote_active_ = false;  ///< True if remote is currently controlling the winch
 };
+

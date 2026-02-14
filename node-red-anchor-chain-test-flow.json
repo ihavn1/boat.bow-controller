@@ -1,0 +1,438 @@
+[
+  {
+    "id": "b0f0a1b2c3d4e5f6",
+    "type": "tab",
+    "label": "Bow Controller Test",
+    "disabled": false,
+    "info": "Node-RED flow for testing bow-controller SignalK paths"
+  },
+  {
+    "id": "c0a1b2c3d4e5f6a7",
+    "type": "comment",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "COMMANDS TO CONTROLLER (PUT paths)",
+    "info": "Inject nodes send to signalk-send-pathvalue using msg.topic as the path and msg.payload as the value.",
+    "x": 210,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "sk-send-0001",
+    "type": "signalk-send-pathvalue",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Send to SignalK",
+    "path": "",
+    "source": "",
+    "meta": "",
+    "x": 610,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "inj-manual-up",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Manual: UP (1)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.manualControl",
+    "payload": "1",
+    "payloadType": "num",
+    "x": 150,
+    "y": 100,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-manual-stop",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Manual: STOP (0)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.manualControl",
+    "payload": "0",
+    "payloadType": "num",
+    "x": 160,
+    "y": 140,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-manual-down",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Manual: DOWN (-1)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.manualControl",
+    "payload": "-1",
+    "payloadType": "num",
+    "x": 170,
+    "y": 180,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-reset",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Reset Rode (true)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.resetRode",
+    "payload": "true",
+    "payloadType": "bool",
+    "x": 160,
+    "y": 220,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-target-10",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Arm Target: 10m",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.targetRodeCommand",
+    "payload": "10",
+    "payloadType": "num",
+    "x": 160,
+    "y": 280,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-target-15",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Arm Target: 15m",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.targetRodeCommand",
+    "payload": "15",
+    "payloadType": "num",
+    "x": 160,
+    "y": 320,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-auto-on",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Auto Mode: ON (1.0)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.automaticModeCommand",
+    "payload": "1",
+    "payloadType": "num",
+    "x": 170,
+    "y": 360,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-auto-off",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Auto Mode: OFF (0.0)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.automaticModeCommand",
+    "payload": "0",
+    "payloadType": "num",
+    "x": 180,
+    "y": 400,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-home",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Home: Arm (true)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.anchor.homeCommand",
+    "payload": "true",
+    "payloadType": "bool",
+    "x": 160,
+    "y": 440,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "c0a1b2c3d4e5f6b8",
+    "type": "comment",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "SUBSCRIPTIONS (Status outputs)",
+    "info": "Subscribe to controller outputs and show in debug panel.",
+    "x": 190,
+    "y": 460,
+    "wires": []
+  },
+  {
+    "id": "sk-sub-rode",
+    "type": "signalk-subscribe",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Subscribe: currentRode",
+    "path": "navigation.anchor.currentRode",
+    "period": 1000,
+    "x": 170,
+    "y": 520,
+    "wires": [
+      [
+        "dbg-rode"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-rode",
+    "type": "debug",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "currentRode (m)",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload",
+    "statusType": "auto",
+    "x": 420,
+    "y": 520,
+    "wires": []
+  },
+  {
+    "id": "sk-sub-auto",
+    "type": "signalk-subscribe",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Subscribe: automaticModeStatus",
+    "path": "navigation.anchor.automaticModeStatus",
+    "period": 500,
+    "x": 210,
+    "y": 560,
+    "wires": [
+      [
+        "dbg-auto"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-auto",
+    "type": "debug",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "automaticModeStatus",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload",
+    "statusType": "auto",
+    "x": 430,
+    "y": 560,
+    "wires": []
+  },
+  {
+    "id": "sk-sub-target",
+    "type": "signalk-subscribe",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Subscribe: targetRodeStatus",
+    "path": "navigation.anchor.targetRodeStatus",
+    "period": 1000,
+    "x": 200,
+    "y": 600,
+    "wires": [
+      [
+        "dbg-target"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-target",
+    "type": "debug",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "targetRodeStatus",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload",
+    "statusType": "auto",
+    "x": 420,
+    "y": 600,
+    "wires": []
+  },
+  {
+    "id": "sk-sub-manual",
+    "type": "signalk-subscribe",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Subscribe: manualControlStatus",
+    "path": "navigation.anchor.manualControlStatus",
+    "period": 500,
+    "x": 210,
+    "y": 640,
+    "wires": [
+      [
+        "dbg-manual"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-manual",
+    "type": "debug",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "manualControlStatus",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload",
+    "statusType": "auto",
+    "x": 420,
+    "y": 640,
+    "wires": []
+  },
+  {
+    "id": "global-config",
+    "type": "global-config",
+    "env": [],
+    "modules": {
+      "@signalk/node-red-embedded": "2.18.2"
+    }
+  }
+]

@@ -73,7 +73,7 @@ public:
         digitalWrite(PinConfig::WINCH_DOWN, HIGH);
         active_ = false;
         current_direction_ = Direction::STOPPED;
-        debugD("Winch stopped");
+        logStopThrottled();
     }
 
     /// @return true if winch is currently active
@@ -95,6 +95,7 @@ public:
 private:
     bool active_;               ///< True if winch is currently moving
     Direction current_direction_; ///< Current movement direction
+    unsigned long last_stop_log_ms_ = 0;  ///< Throttle winch stop logging
 
     /**
      * @brief Check if anchor is at home position
@@ -102,5 +103,13 @@ private:
      */
     bool isAtHome() const {
         return digitalRead(PinConfig::ANCHOR_HOME) == LOW;
+    }
+
+    void logStopThrottled() {
+        const unsigned long now_ms = millis();
+        if (now_ms - last_stop_log_ms_ >= 5000UL) {
+            debugD("Winch stopped");
+            last_stop_log_ms_ = now_ms;
+        }
     }
 };
