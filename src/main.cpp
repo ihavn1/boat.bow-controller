@@ -117,18 +117,31 @@ bool commands_allowed = false;              // Commands blocked until SignalK co
 unsigned long connection_stable_time = 0;   // Time when we can allow commands
 
 // Helper function to cleanly disable automatic mode from any source
-void disableAutoMode() {
-    if (auto_mode_controller && auto_mode_controller->isEnabled()) {
-        auto_mode_controller->setEnabled(false);
+void disableAutoMode(bool clear_target) {
+    if (!auto_mode_controller) {
+        return;
+    }
+
+    bool was_enabled = auto_mode_controller->isEnabled();
+    bool had_target = auto_mode_controller->getTargetLength() >= 0.0f;
+
+    auto_mode_controller->setEnabled(false);
+    if (clear_target) {
         auto_mode_controller->setTargetLength(-1.0f);
-        if (auto_mode_output_ptr) {
-            auto_mode_output_ptr->set_input(0.0f);
-        }
-        if (target_output_ptr) {
-            target_output_ptr->set_input(-1.0f);
-        }
+    }
+    if (auto_mode_output_ptr) {
+        auto_mode_output_ptr->set_input(0.0f);
+    }
+    if (clear_target && target_output_ptr) {
+        target_output_ptr->set_input(-1.0f);
+    }
+    if (was_enabled || had_target) {
         debugD("Automatic mode disabled");
     }
+}
+
+void disableAutoMode() {
+    disableAutoMode(true);
 }
 
 // Interrupt Service Routine - Pulse Counter with Direction Sensing
@@ -158,9 +171,29 @@ public:
     }
 
     void update() {
+        bool at_home = home_sensor.isHome();
+        if (at_home) {
+            if (winch_controller.isMovingUp()) {
+                winch_controller.stop();
+                debugD("Anchor home reached - stopped and reset");
+            }
+            bool just_arrived = home_sensor.justArrived();
+            if (just_arrived || pulse_count != 0) {
+                pulse_count = 0;
+                debugD("Anchor at home - counter reset");
+            }
+            // Clear auto-home only; allow deploy auto mode to run from home
+            if (auto_mode_controller && auto_mode_controller->getTargetLength() == 0.0f) {
+                disableAutoMode();
+            }
+        } else {
+            // Keep edge tracking accurate when not at home
+            home_sensor.justLeft();
+        }
+
         float meters = pulse_count * config_meters_per_pulse;
         this->emit(meters);
-        
+
         // Periodic debug output
         static unsigned long last_debug = 0;
         if (millis() - last_debug > 5000) {
@@ -169,24 +202,13 @@ public:
                    pulse_count, dir_state ? "OUT" : "IN", meters);
             last_debug = millis();
         }
-        
-        // Home position detection and auto-reset
-        if (home_sensor.isHome()) {
-            if (winch_controller.isMovingUp()) {
-                winch_controller.stop();
-                debugD("Anchor home reached - stopped and reset");
-            }
-            if (home_sensor.justArrived()) {
-                pulse_count = 0;
-                debugD("Anchor at home - counter reset");
-                // Disable auto mode on home arrival (for auto-home feature)
-                disableAutoMode();
-            }
-        }
-        
+
         // Automatic mode control logic
         if (auto_mode_controller) {
             auto_mode_controller->update(meters);
+            if (auto_mode_controller->consumeTargetReached()) {
+                disableAutoMode();
+            }
         }
     }
 
@@ -321,7 +343,7 @@ void setup()
     auto* auto_mode_listener = new FloatSKListener("navigation.anchor.automaticModeCommand");
     
     auto_mode_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float value) {
-        if (!commands_allowed) return value;  // Block until connection stable
+        if (!commands_allowed) return 0.0f;  // Block until connection stable
         bool enable = (value > 0.5);
         
         if (enable != auto_mode_controller->isEnabled()) {
@@ -352,10 +374,11 @@ void setup()
             float current = pulse_count * pulse_counter->get_meters_per_pulse();
             
             debugD("Target armed: %.2f m (current: %.2f m)", target, current);
-            
-            // Start winch immediately if automatic mode already enabled
+
+            // If auto mode was enabled before arming, disable it to enforce arm-then-enable
             if (auto_mode_controller->isEnabled()) {
-                auto_mode_controller->update(current);
+                disableAutoMode(false);
+                debugD("Auto mode disabled - target armed requires re-enable");
             }
         }
         return target;
@@ -374,6 +397,10 @@ void setup()
                 auto_mode_controller->setTargetLength(0.0f);
                 target_output_ptr->set_input(0.0f);
                 debugD("Home command armed: target set to 0.0 m");
+                if (auto_mode_controller->isEnabled()) {
+                    disableAutoMode(false);
+                    debugD("Auto mode disabled - home armed requires re-enable");
+                }
             }
             // Clear command immediately to allow retriggering
             home_output->set_input(false);
