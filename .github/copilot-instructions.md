@@ -68,10 +68,8 @@ The project uses **PlatformIO** for all build and development tasks.
   remote_control = new RemoteControl(winch_controller);
   ```
 - **Dependency Injection**: Classes receive dependencies through constructors (e.g., `AutomaticModeController` receives `WinchController&`), enabling loose coupling and testability.
-- **Helper Modules**: The `include/` directory contains both active modules (controller classes) and unused helper modules (`ah_integrator.h`, `battery_helper.h`, `onewire_helper.h`) for future expans
 - **SignalK Communication**:
   - To send data to SignalK, connect a producer to an `SKOutput` class (e.g., `SKOutputFloat`).
   - To receive data from SignalK, create an `SKListener` (e.g., `IntSKListener`) and connect it to a `LambdaConsumer` or `LambdaTransform` to process the incoming value.
 - **Asynchronous Operations**: The main `loop()` is minimal - it only calls `handleManualInputs()` for physical remote polling and then `event_loop()->tick()`. All recurring tasks, like reading the pulse counter, are handled by the SensESP event loop, which is set up via `event_loop()->onRepeat()` in the `PulseCounter` constructor. Interrupts (`pulseISR`) handle high-frequency hardware events.
-- **Helper Modules**: The `include/` directory contains unused helper modules (`ah_integrator.h`, `battery_helper.h`, `onewire_helper.h`) for future expansion. These are not currently compiled or used in the anchor counter application.
 ````

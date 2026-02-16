@@ -73,7 +73,6 @@ private:
     // ========== SignalK Outputs ==========
     SKOutputFloat* rode_output_ = nullptr;
     SKOutputBool* reset_output_ = nullptr;
-    SKOutputBool* emergency_cmd_output_ = nullptr;
     ObservableValue<bool>* emergency_stop_status_value_ = nullptr;
     SKOutputInt* manual_control_output_ = nullptr;
     SKOutputFloat* auto_mode_output_ = nullptr;
