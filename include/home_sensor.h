@@ -1,60 +1,45 @@
 #pragma once
 
-#include <Arduino.h>
-#include "pin_config.h"
+#include "interfaces/ISensor.h"
 
 /**
  * @file home_sensor.h
- * @brief Monitors anchor home position sensor and detects state changes
+ * @brief Semantic wrapper for home position sensor
  * 
- * The home sensor indicates when the anchor is fully retrieved (at home position).
- * This class tracks state changes to detect when the anchor arrives at or leaves home.
+ * This class provides business-logic semantics around a generic sensor.
+ * It depends on ISensor interface, allowing any sensor implementation.
  * 
- * Hardware: Sensor is active-LOW (reads LOW when anchor is at home)
+ * DESIGN PRINCIPLE: Composition over Inheritance
+ * - Uses ISensor for hardware abstraction
+ * - Provides domain-specific methods (isHome, justArrived, justLeft)
+ * - Testable with mock sensors
  */
 class HomeSensor {
 public:
     /**
-     * @brief Initialize home sensor GPIO pin
-     * Sets pin to INPUT_PULLUP mode and reads initial state
+     * @brief Construct home sensor wrapper
+     * @param sensor Reference to sensor implementation (e.g., ESP32Sensor<PIN>)
      */
-    void initialize() {
-        pinMode(PinConfig::ANCHOR_HOME, INPUT_PULLUP);
-        was_home_ = isHome();
-    }
+    HomeSensor(ISensor& sensor) : sensor_(sensor) {}
 
     /**
      * @brief Check if anchor is currently at home position
-     * @return true if anchor is at home (sensor reads LOW)
+     * @return true if anchor is at home
      */
-    bool isHome() const {
-        return digitalRead(PinConfig::ANCHOR_HOME) == LOW;
-    }
+    bool isHome() const;
 
     /**
      * @brief Detect if anchor just arrived at home
      * @return true if anchor just transitioned to home position
-     * @note Call this repeatedly to track state changes
      */
-    bool justArrived() {
-        bool current_state = isHome();
-        bool just_arrived = current_state && !was_home_;
-        was_home_ = current_state;
-        return just_arrived;
-    }
+    bool justArrived();
 
     /**
      * @brief Detect if anchor just left home position
      * @return true if anchor just left home position
-     * @note Call this repeatedly to track state changes
      */
-    bool justLeft() {
-        bool current_state = isHome();
-        bool just_left = !current_state && was_home_;
-        was_home_ = current_state;
-        return just_left;
-    }
+    bool justLeft();
 
 private:
-    bool was_home_ = false;  ///< Previous home state for edge detection
+    ISensor& sensor_;  ///< Underlying sensor implementation
 };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 /**
  * @file pin_config.h
  * @brief Centralized GPIO pin configuration for the anchor chain counter system

@@ -1,115 +1,60 @@
 #pragma once
 
-#include <Arduino.h>
-#include "pin_config.h"
+#include "interfaces/IMotor.h"
+#include "interfaces/ISensor.h"
 
 /**
  * @file winch_controller.h
  * @brief Manages winch motor control with built-in safety checks
  * 
  * This class encapsulates all winch control logic, including:
- * - Active-LOW relay control (safe default state)
+ * - Motor control via IMotor interface (abstracted hardware)
  * - Home sensor safety blocking (prevents over-retrieval)
- * - State tracking (direction, active status)
  * 
- * SAFETY: Winch outputs use active-LOW logic. Pins default to HIGH (inactive)
- * on boot, ensuring the winch cannot start accidentally.
+ * DESIGN PRINCIPLE: Dependency Injection + Dependency Inversion
+ * - Depends on IMotor and ISensor interfaces, not concrete GPIO implementations
+ * - Allows testing with mock motors/sensors without hardware
+ * - Can be used with any motor/sensor implementation
+ * 
+ * SAFETY: Motor outputs use active-LOW logic. Pins default to HIGH (inactive)
+ * on boot, ensuring the motor cannot start accidentally.
  */
 class WinchController {
 public:
-    /// Winch movement direction states
-    enum class Direction {
-        STOPPED,  ///< Winch is not moving
-        UP,       ///< Winch is retrieving (pulling chain in)
-        DOWN      ///< Winch is deploying (letting chain out)
-    };
-
-    WinchController() : active_(false), current_direction_(Direction::STOPPED) {}
-
     /**
-     * @brief Initialize GPIO pins for winch control
-     * Sets pins to OUTPUT mode and ensures winch starts in stopped state
+     * @brief Construct winch controller with dependency injection
+     * @param motor Reference to motor implementation (e.g., ESP32Motor)
+     * @param home_sensor Reference to home sensor implementation (e.g., ESP32Sensor<PIN>)
      */
-    void initialize() {
-        pinMode(PinConfig::WINCH_UP, OUTPUT);
-        pinMode(PinConfig::WINCH_DOWN, OUTPUT);
-        stop();
-    }
+    WinchController(IMotor& motor, ISensor& home_sensor)
+        : motor_(motor), home_sensor_(home_sensor) {}
 
     /**
      * @brief Move winch UP (retrieve chain)
      * @note Automatically blocks if anchor is already at home position
      */
-    void moveUp() {
-        if (isAtHome()) {
-            debugD("Anchor already home - cannot retrieve further");
-            stop();
-            return;
-        }
-        digitalWrite(PinConfig::WINCH_DOWN, HIGH);
-        digitalWrite(PinConfig::WINCH_UP, LOW);
-        active_ = true;
-        current_direction_ = Direction::UP;
-        debugD("Winch UP activated");
-    }
+    void moveUp();
 
     /**
      * @brief Move winch DOWN (deploy chain)
      */
-    void moveDown() {
-        digitalWrite(PinConfig::WINCH_UP, HIGH);
-        digitalWrite(PinConfig::WINCH_DOWN, LOW);
-        active_ = true;
-        current_direction_ = Direction::DOWN;
-        debugD("Winch DOWN activated");
-    }
+    void moveDown();
 
     /**
      * @brief Stop winch movement
-     * Sets both outputs to inactive (HIGH) state
      */
-    void stop() {
-        digitalWrite(PinConfig::WINCH_UP, HIGH);
-        digitalWrite(PinConfig::WINCH_DOWN, HIGH);
-        active_ = false;
-        current_direction_ = Direction::STOPPED;
-        logStopThrottled();
-    }
+    void stop();
 
-    /// @return true if winch is currently active
-    bool isActive() const { return active_; }
-    
-    /// @return Current movement direction
-    Direction getCurrentDirection() const { return current_direction_; }
-    
-    /// @return true if winch is currently moving up
-    bool isMovingUp() const { 
-        return active_ && digitalRead(PinConfig::WINCH_UP) == LOW; 
-    }
-    
-    /// @return true if winch is currently moving down
-    bool isMovingDown() const { 
-        return active_ && digitalRead(PinConfig::WINCH_DOWN) == LOW; 
-    }
+    /// @return true if motor is currently active
+    bool isActive() const;
+
+    /// @return true if motor is currently moving up
+    bool isMovingUp() const;
+
+    /// @return true if motor is currently moving down
+    bool isMovingDown() const;
 
 private:
-    bool active_;               ///< True if winch is currently moving
-    Direction current_direction_; ///< Current movement direction
-    unsigned long last_stop_log_ms_ = 0;  ///< Throttle winch stop logging
-
-    /**
-     * @brief Check if anchor is at home position
-     * @return true if home sensor reads LOW (anchor at home)
-     */
-    bool isAtHome() const {
-        return digitalRead(PinConfig::ANCHOR_HOME) == LOW;
-    }
-
-    void logStopThrottled() {
-        const unsigned long now_ms = millis();
-        if (now_ms - last_stop_log_ms_ >= 5000UL) {
-            debugD("Winch stopped");
-            last_stop_log_ms_ = now_ms;
-        }
-    }
+    IMotor& motor_;              ///< Motor control implementation
+    ISensor& home_sensor_;       ///< Home position sensor implementation
 };
