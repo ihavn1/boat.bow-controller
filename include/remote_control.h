@@ -65,11 +65,53 @@ public:
     bool processInputs() {
         bool up_pressed = digitalRead(PinConfig::REMOTE_UP) == HIGH;
         bool down_pressed = digitalRead(PinConfig::REMOTE_DOWN) == HIGH;
-        bool button_active = up_pressed || down_pressed;
+        bool func3_pressed = digitalRead(PinConfig::REMOTE_FUNC3) == HIGH;
+        bool func4_pressed = digitalRead(PinConfig::REMOTE_FUNC4) == HIGH;
+        bool any_button_active = up_pressed || down_pressed || func3_pressed || func4_pressed;
+
+        const unsigned long kDoublePressMs = 800;
+        const unsigned long kLongPressMs = 2000;
+        unsigned long now_ms = millis();
+
+        // Emergency stop handling (declared extern in main.cpp)
+        extern bool emergency_stop_active;
+        extern void setEmergencyStop(bool active, const char* reason);
+
+        // Detect rising edge for double-press
+        if (any_button_active && !prev_button_active_) {
+            if (last_press_ms_ > 0 && (now_ms - last_press_ms_ <= kDoublePressMs)) {
+                setEmergencyStop(true, "remote-double-press");
+            }
+            last_press_ms_ = now_ms;
+            press_start_ms_ = now_ms;
+            long_press_fired_ = false;
+        }
+
+        // Long-press to clear emergency stop
+        if (any_button_active && emergency_stop_active && !long_press_fired_ && press_start_ms_ > 0 &&
+            now_ms - press_start_ms_ >= kLongPressMs) {
+            setEmergencyStop(false, "remote-long-press");
+            long_press_fired_ = true;
+        }
+
+        if (!any_button_active && prev_button_active_) {
+            press_start_ms_ = 0;
+            long_press_fired_ = false;
+        }
+
+        prev_button_active_ = any_button_active;
+
+        if (emergency_stop_active) {
+            if (remote_active_) {
+                winch_.stop();
+                remote_active_ = false;
+            }
+            return false;
+        }
 
         // Remote button press overrides automatic mode (declared extern in main.cpp)
         extern void disableAutoMode();
-        if (button_active && auto_mode_controller_) {
+        if ((up_pressed || down_pressed) && auto_mode_controller_) {
             if (auto_mode_controller_->isEnabled()) {
                 disableAutoMode();
             }
@@ -114,5 +156,9 @@ private:
     AutomaticModeController* auto_mode_controller_;  ///< Pointer to auto mode controller
     SKOutputFloat* auto_mode_output_ptr_;  ///< Pointer to auto mode SignalK output
     bool remote_active_ = false;  ///< True if remote is currently controlling the winch
+    bool prev_button_active_ = false;  ///< Previous combined button state for edge detection
+    unsigned long last_press_ms_ = 0;  ///< Time of last button press
+    unsigned long press_start_ms_ = 0;  ///< Time when current press started
+    bool long_press_fired_ = false;  ///< True if long-press action already triggered
 };
 

@@ -290,6 +290,64 @@
     ]
   },
   {
+    "id": "e1e2e3e4e5e6e7e8",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Emergency Stop: ON (true)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.bow.ecu.emergencyStopCommand",
+    "payload": "true",
+    "payloadType": "bool",
+    "x": 190,
+    "y": 480,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
+    "id": "f1f2f3f4f5f6f7f8",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Emergency Stop: OFF (false)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "navigation.bow.ecu.emergencyStopCommand",
+    "payload": "false",
+    "payloadType": "bool",
+    "x": 200,
+    "y": 520,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
+  },
+  {
     "id": "c0a1b2c3d4e5f6b8",
     "type": "comment",
     "z": "b0f0a1b2c3d4e5f6",
@@ -323,9 +381,9 @@
     "tosidebar": true,
     "console": false,
     "tostatus": true,
-    "complete": "payload",
+    "complete": "payload.updates[0].values[0].value",
     "targetType": "msg",
-    "statusVal": "payload",
+    "statusVal": "payload.updates[0].values[0].value",
     "statusType": "auto",
     "x": 420,
     "y": 520,
@@ -355,9 +413,9 @@
     "tosidebar": true,
     "console": false,
     "tostatus": true,
-    "complete": "payload",
+    "complete": "payload.updates[0].values[0].value",
     "targetType": "msg",
-    "statusVal": "payload",
+    "statusVal": "payload.updates[0].values[0].value",
     "statusType": "auto",
     "x": 430,
     "y": 560,
@@ -387,9 +445,9 @@
     "tosidebar": true,
     "console": false,
     "tostatus": true,
-    "complete": "payload",
+    "complete": "payload.updates[0].values[0].value",
     "targetType": "msg",
-    "statusVal": "payload",
+    "statusVal": "payload.updates[0].values[0].value",
     "statusType": "auto",
     "x": 420,
     "y": 600,
@@ -419,12 +477,44 @@
     "tosidebar": true,
     "console": false,
     "tostatus": true,
-    "complete": "payload",
+    "complete": "payload.updates[0].values[0].value",
     "targetType": "msg",
-    "statusVal": "payload",
+    "statusVal": "payload.updates[0].values[0].value",
     "statusType": "auto",
     "x": 420,
     "y": 640,
+    "wires": []
+  },
+  {
+    "id": "a1b2c3d4e5f60718",
+    "type": "signalk-subscribe",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Subscribe: emergencyStopStatus",
+    "path": "navigation.bow.ecu.emergencyStopStatus",
+    "period": 500,
+    "x": 230,
+    "y": 680,
+    "wires": [
+      [
+        "b1c2d3e4f5061728"
+      ]
+    ]
+  },
+  {
+    "id": "b1c2d3e4f5061728",
+    "type": "debug",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "emergencyStopStatus",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload.updates[0].values[0].value",
+    "targetType": "msg",
+    "statusVal": "payload.updates[0].values[0].value",
+    "statusType": "auto",
+    "x": 450,
+    "y": 680,
     "wires": []
   },
   {

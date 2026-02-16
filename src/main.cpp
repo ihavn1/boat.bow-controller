@@ -10,6 +10,7 @@
 #include "sensesp/signalk/signalk_value_listener.h"
 #include "sensesp/transforms/lambda_transform.h"
 #include "sensesp/system/valueconsumer.h"
+#include "sensesp/system/observablevalue.h"
 #include "sensesp/system/hash.h"
 
 #include "pin_config.h"
@@ -113,8 +114,12 @@ volatile long pulse_count = 0;              // Bidirectional pulse counter (ISR 
 float config_meters_per_pulse = 0.01;       // Configurable conversion factor
 SKOutputFloat* auto_mode_output_ptr = nullptr;  // For updating auto mode status
 SKOutputFloat* target_output_ptr = nullptr;     // For updating target rode status
+SKOutputInt* manual_control_output_ptr = nullptr;  // For updating manual control status
+SKOutputBool* home_command_output_ptr = nullptr;  // For clearing home command
+ObservableValue<bool>* emergency_stop_status_value = nullptr;  // For emergency stop status updates
 bool commands_allowed = false;              // Commands blocked until SignalK connection stable for 5s
 unsigned long connection_stable_time = 0;   // Time when we can allow commands
+bool emergency_stop_active = false;          // True when emergency stop is active
 
 // Helper function to cleanly disable automatic mode from any source
 void disableAutoMode(bool clear_target) {
@@ -142,6 +147,43 @@ void disableAutoMode(bool clear_target) {
 
 void disableAutoMode() {
     disableAutoMode(true);
+}
+
+void setAllOutputsInactive() {
+    winch_controller.stop();
+    digitalWrite(PinConfig::REMOTE_OUT1, HIGH);
+    digitalWrite(PinConfig::REMOTE_OUT2, HIGH);
+}
+
+void setEmergencyStop(bool active, const char* reason) {
+    bool state_changed = (emergency_stop_active != active);
+    emergency_stop_active = active;
+    setAllOutputsInactive();
+
+    if (active) {
+        disableAutoMode(true);
+        if (manual_control_output_ptr) {
+            manual_control_output_ptr->set_input(0);
+        }
+        if (home_command_output_ptr) {
+            home_command_output_ptr->set_input(false);
+        }
+        if (emergency_stop_status_value) {
+            emergency_stop_status_value->set(true);
+            emergency_stop_status_value->notify();  // Force emission even if unchanged
+        }
+        if (state_changed) {
+            ESP_LOGI("emergency_stop", "Emergency stop ACTIVATED (%s)", reason);
+        }
+    } else {
+        if (emergency_stop_status_value) {
+            emergency_stop_status_value->set(false);
+            emergency_stop_status_value->notify();  // Force emission even if unchanged
+        }
+        if (state_changed) {
+            ESP_LOGI("emergency_stop", "Emergency stop CLEARED (%s)", reason);
+        }
+    }
 }
 
 // Interrupt Service Routine - Pulse Counter with Direction Sensing
@@ -292,6 +334,7 @@ void setup()
     auto* reset_output = new SKOutputBool("navigation.anchor.resetRode", "/reset_rode/sk_path");
     reset_output->set_input(false);  // Clear command on boot
     reset_listener->connect_to(new LambdaConsumer<bool>([pulse_counter, reset_output](bool reset_signal) {
+        if (emergency_stop_active) return;
         if (!commands_allowed) return;  // Block until connection stable
         if (reset_signal) {
             pulse_counter->reset();
@@ -301,13 +344,41 @@ void setup()
         }
     }));
 
+    // Emergency stop command (INPUT) and status (OUTPUT)
+    auto* emergency_cmd_listener = new BoolSKListener("navigation.bow.ecu.emergencyStopCommand");
+    
+    // Create ObservableValue for status with automatic SignalK emission
+    emergency_stop_status_value = new ObservableValue<bool>();
+    emergency_stop_status_value->connect_to(new SKOutputBool(
+        "navigation.bow.ecu.emergencyStopStatus",
+        "/emergency_stop_status/sk_path"
+    ));
+    emergency_stop_status_value->set(false);
+    emergency_stop_status_value->notify();  // Initialize and emit first value
+    
+    emergency_cmd_listener->connect_to(new LambdaConsumer<bool>([](bool emergency_active) {
+        if (!commands_allowed && !emergency_stop_active) {
+            // During startup, force status to false
+            if (emergency_stop_status_value) {
+                emergency_stop_status_value->set(false);
+                emergency_stop_status_value->notify();
+            }
+            return;
+        }
+
+        // Process command: let setEmergencyStop handle state changes
+        setEmergencyStop(emergency_active, "signalk");
+    }));
+
     // Manual Windlass Control: Single path with three states (1=UP, 0=STOP, -1=DOWN)
     // Manual control overrides automatic mode
     auto* manual_control_output = new SKOutputInt("navigation.anchor.manualControlStatus", "/manual_control_status/sk_path");
+    manual_control_output_ptr = manual_control_output;
     manual_control_output->set_input(0);  // Initialize to STOP on boot
     auto* manual_control_listener = new IntSKListener("navigation.anchor.manualControl");
     
     manual_control_listener->connect_to(new LambdaTransform<int, int>([](int command) {
+        if (emergency_stop_active) return 0;
         if (!commands_allowed) return 0;  // Block until connection stable
         // Manual control always overrides automatic mode
         disableAutoMode();
@@ -343,6 +414,7 @@ void setup()
     auto* auto_mode_listener = new FloatSKListener("navigation.anchor.automaticModeCommand");
     
     auto_mode_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float value) {
+        if (emergency_stop_active) return 0.0f;
         if (!commands_allowed) return 0.0f;  // Block until connection stable
         bool enable = (value > 0.5);
         
@@ -367,6 +439,7 @@ void setup()
     auto* target_listener = new FloatSKListener("navigation.anchor.targetRodeCommand");
     
     target_listener->connect_to(new LambdaTransform<float, float>([pulse_counter](float target) {
+        if (emergency_stop_active) return -1.0f;
         if (!commands_allowed) return target;  // Block until connection stable
         // Accept any valid target (including re-sending same value)
         if (target >= 0) {
@@ -388,7 +461,14 @@ void setup()
     auto* home_listener = new BoolSKListener("navigation.anchor.homeCommand");
     auto* home_output = new SKOutputBool("navigation.anchor.homeCommand", "/home_command/sk_path");
     home_output->set_input(false);  // Clear command on boot
+    home_command_output_ptr = home_output;
     home_listener->connect_to(new LambdaConsumer<bool>([home_output](bool go_home) {
+        if (emergency_stop_active) {
+            if (go_home) {
+                home_output->set_input(false);
+            }
+            return;
+        }
         if (!commands_allowed) return;  // Block until connection stable
         if (go_home) {
             if (winch_controller.isActive() && !auto_mode_controller->isEnabled()) {
