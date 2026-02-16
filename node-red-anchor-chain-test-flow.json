@@ -10,23 +10,42 @@
     "id": "c0a1b2c3d4e5f6a7",
     "type": "comment",
     "z": "b0f0a1b2c3d4e5f6",
-    "name": "COMMANDS TO CONTROLLER (PUT paths)",
-    "info": "Inject nodes send to signalk-send-pathvalue using msg.topic as the path and msg.payload as the value.",
+    "name": "COMMANDS TO CONTROLLER (DELTA updates)",
+    "info": "Inject nodes send delta updates using msg.topic as the path and msg.payload as the value.",
     "x": 210,
     "y": 40,
     "wires": []
   },
   {
     "id": "sk-send-0001",
-    "type": "signalk-send-pathvalue",
+    "type": "signalk-send-delta",
     "z": "b0f0a1b2c3d4e5f6",
-    "name": "Send to SignalK",
+    "name": "Send Delta to SignalK",
     "path": "",
     "source": "",
     "meta": "",
-    "x": 610,
+    "x": 640,
     "y": 120,
     "wires": []
+  },
+  {
+    "id": "fn-delta-0001",
+    "type": "function",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "To Delta Update",
+    "func": "return {\n    payload: {\n        updates: [\n            {\n                source: { label: \"nodered\" },\n                values: [\n                    { path: msg.topic, value: msg.payload }\n                ]\n            }\n        ]\n    }\n};",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 400,
+    "y": 120,
+    "wires": [
+      [
+        "sk-send-0001"
+      ]
+    ]
   },
   {
     "id": "inj-manual-up",
@@ -53,7 +72,7 @@
     "y": 100,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -82,7 +101,7 @@
     "y": 140,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -111,7 +130,7 @@
     "y": 180,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -140,7 +159,7 @@
     "y": 220,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -169,7 +188,7 @@
     "y": 280,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -198,7 +217,7 @@
     "y": 320,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -227,7 +246,7 @@
     "y": 360,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -256,7 +275,7 @@
     "y": 400,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -285,7 +304,7 @@
     "y": 440,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -314,7 +333,7 @@
     "y": 480,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },
@@ -343,7 +362,7 @@
     "y": 520,
     "wires": [
       [
-        "sk-send-0001"
+        "fn-delta-0001"
       ]
     ]
   },

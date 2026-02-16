@@ -4,6 +4,12 @@
 // Global app instance (needed for ISR access)
 static BoatAnchorApp* g_app = nullptr;
 
+void emergencyStopChangedThunk(bool is_active, const char* reason) {
+    if (g_app) {
+        g_app->onEmergencyStopChanged(is_active, reason);
+    }
+}
+
 // Interrupt Service Routine - Pulse Counter with Direction Sensing
 // Called from ISR context - must be very fast
 void IRAM_ATTR pulseISR() {
@@ -94,8 +100,8 @@ void BoatAnchorApp::initializeControllers() {
 void BoatAnchorApp::initializeServices() {
     // Initialize emergency stop service (without callback - SignalK will handle updates)
     emergency_stop_service_ = new EmergencyStopService(state_manager_, winch_controller_);
-    // Note: onStateChange callback requires a raw function pointer, not a lambda
-    // Instead, SignalK integration will poll the state and emit updates
+    // Use a thunk to forward the callback to the app instance
+    emergency_stop_service_->onStateChange(emergencyStopChangedThunk);
     
     // Initialize pulse counter service
     pulse_counter_service_ = new PulseCounterService(state_manager_, winch_controller_, 

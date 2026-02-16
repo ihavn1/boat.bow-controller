@@ -80,9 +80,17 @@ void SignalKService::setupEmergencyStopBindings() {
         // Process command: delegate to emergency stop service
         if (emergency_stop_service_) {
             emergency_stop_service_->setActive(emergency_active, "signalk");
+            
+            // Update status value to reflect actual state and emit to SignalK
+            if (emergency_stop_status_value_) {
+                bool actual_state = emergency_stop_service_->isActive();
+                emergency_stop_status_value_->set(actual_state);
+                emergency_stop_status_value_->notify();
+                debugD("Emergency stop status updated: %s", actual_state ? "ACTIVE" : "CLEARED");
+            }
         }
         return emergency_active;
-    }));
+    }))->connect_to(emergency_stop_status_value_);
 }
 
 void SignalKService::setupManualControlBindings() {
@@ -264,5 +272,16 @@ void SignalKService::startConnectionMonitoring() {
             debugD("SignalK connection stable - commands now allowed");
         }
         was_connected = is_connected;
+        
+        // Sync emergency stop status back to SignalK (in case it was triggered by physical remote)
+        if (emergency_stop_status_value_ && emergency_stop_service_) {
+            bool actual_state = emergency_stop_service_->isActive();
+            bool current_value = emergency_stop_status_value_->get();
+            if (actual_state != current_value) {
+                emergency_stop_status_value_->set(actual_state);
+                emergency_stop_status_value_->notify();
+                debugD("Emergency stop status synced: %s", actual_state ? "ACTIVE" : "CLEARED");
+            }
+        }
     });
 }

@@ -101,6 +101,11 @@ public:
      */
     SignalKService* getSignalKService() { return signalk_service_; }
 
+    /**
+     * @brief Handle emergency stop state changes
+     */
+    void onEmergencyStopChanged(bool is_active, const char* reason);
+
 private:
     // ========== State Management ==========
     StateManager state_manager_;
@@ -125,5 +130,4 @@ private:
     void initializeControllers();
     void initializeServices();
     void attachPulseISR();
-    void onEmergencyStopChanged(bool is_active, const char* reason);
 };
