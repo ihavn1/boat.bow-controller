@@ -1,26 +1,29 @@
-# Boat Bow Sensors - Anchor Chain Counter & Windlass Control
+# Boat Control System - Anchor Windlass & Bow Thruster Controller
 
-An ESP32-based anchor chain counter and automatic windlass control system with SignalK integration.
+An ESP32-based dual-system controller for anchor chain management and bow thruster control with SignalK integration.
 
 ## Features
 
-### Anchor Chain Length Monitoring
+### Anchor Windlass Control
 - **Bidirectional pulse counting** - Accurate chain length measurement with direction sensing
 - **Real-time tracking** - Continuous monitoring of deployed chain length
-- **SignalK integration** - Reports current rode length to `navigation.anchor.currentRode`
-- **Web-based calibration** - Configurable meters-per-pulse conversion factor
+- **Automatic positioning** - Auto-retrieve or deploy to reach target length
+- **Home position detection** - Prevents over-retrieval with dedicated sensor
+- **Manual or automatic modes** - Flexible operation via remote, buttons, or SignalK commands
 
-### Automatic Windlass Control
-- **Arm and fire operation** - Set target first, then enable automatic mode when ready
-- **Intelligent control** - Automatically deploys or retrieves chain to reach target
-- **Auto-disable on completion** - Returns to manual mode when target reached
-- **Precision stopping** - Stops within ±2 pulses (±0.2m default) of target
+### Bow Thruster Control
+- **DirectionalLocomotion** - Independent port/starboard control via relays
+- **Multiple command sources** - Remote buttons (FUNC3/FUNC4) and SignalK integration
+- **Safety interlocks** - Emergency stop blocks all commands immediately
+- **Status reporting** - Real-time direction and state via SignalK
+- **Deadman switch behavior** - Remote buttons auto-stop on release
 
 ### Safety Features
-- **Home position detection** - Prevents over-retrieval with dedicated sensor
+- **Home position detection** - Prevents anchor over-retrieval
 - **Automatic counter reset** - Resets to zero when anchor reaches home
-- **Manual override protection** - Manual controls disabled during automatic operation
-- **Status feedback** - Real-time mode and target status via SignalK
+- **Emergency stop integration** - Immediately stops all motors (anchor + bow)
+- **Active-low relay safety** - All relays default to inactive state
+- **Connection stability checking** - SignalK commands blocked until stable connection
 
 ## Hardware Requirements
 
@@ -34,17 +37,20 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 
 | Function | GPIO | Direction | Description |
 |----------|------|-----------|-------------|
+| **Anchor/Winch System** | | | |
 | Pulse Input | 25 | Input | Chain counter pulse sensor |
 | Direction | 26 | Input | HIGH = chain out, LOW = chain in |
 | Anchor Home | 33 | Input | LOW = anchor at home position |
 | Winch UP | 27 | Output | Activate to retrieve chain (active LOW) |
 | Winch DOWN | 14 | Output | Activate to deploy chain (active LOW) |
-| Remote UP | 12 | Input | Manual UP from remote control (active HIGH) |
-| Remote DOWN | 13 | Input | Manual DOWN from remote control (active HIGH) |
-| Remote Func 3| 15 | Input | Spare remote input (reserved, active HIGH) |
-| Remote Func 4| 16 | Input | Spare remote input (reserved, active HIGH) |
-| Remote Out 1 | 4 | Output | Spare remote output (reserved, active LOW) |
-| Remote Out 2 | 5 | Output | Spare remote output (reserved, active LOW) |
+| **Bow Thruster System** | | | |
+| Bow Port | 4 | Output | Turn bow port/left (active LOW) |
+| Bow Starboard | 5 | Output | Turn bow starboard/right (active LOW) |
+| **Remote Control Inputs** | | | |
+| Remote UP | 12 | Input | Winch UP button (active HIGH) |
+| Remote DOWN | 13 | Input | Winch DOWN button (active HIGH) |
+| Remote Func 3 | 15 | Input | Bow PORT button (active HIGH) |
+| Remote Func 4 | 16 | Input | Bow STARBOARD button (active HIGH) |
 
 ## Quick Start
 
@@ -57,25 +63,59 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 
 ## SignalK Paths
 
-### Outputs (Device → SignalK)
+### Anchor Windlass - Outputs (Device → SignalK)
 | Path | Type | Units | Description |
 |------|------|-------|-------------|
-| `navigation.anchor.currentRode` | float | m | Current chain length (meters) |
+| `navigation.anchor.currentRode` | float | m | Current chain length deployed (meters) |
 | `navigation.anchor.automaticModeStatus` | float | - | Automatic mode state (1.0=enabled, 0.0=disabled) |
-| `navigation.anchor.targetRodeStatus` | float | m | Current target length (meters) |
-| `navigation.anchor.manualControlStatus` | int | - | Manual control echo (1=UP, 0=STOP, -1=DOWN) |
+| `navigation.anchor.targetRodeStatus` | float | m | Current armed target length |
+| `navigation.anchor.manualControlStatus` | int | - | Manual control state (1=UP, 0=STOP, -1=DOWN) |
 
-### Inputs (SignalK → Device)
+### Anchor Windlass - Inputs (SignalK → Device)
 | Path | Type | Values | Description |
 |------|------|--------|-------------|
-| `navigation.anchor.automaticModeCommand` | float | >0.5=enable, ≤0.5=disable | Enable/disable automatic control |
-| `navigation.anchor.targetRodeCommand` | float | meters | Arm target length for automatic mode |
-| `navigation.anchor.manualControl` | int | 1=UP, 0=STOP, -1=DOWN | Manual windlass control |
-| `navigation.anchor.resetRode` | bool | true | Reset counter to zero |
+| `navigation.anchor.automaticModeCommand` | float | >0.5=enable, ≤0.5=disable | Enable/disable automatic mode |
+| `navigation.anchor.targetRodeCommand` | float | meters | Arm target length for automatic winching |
+| `navigation.anchor.manualControl` | int | 1=UP, 0=STOP, -1=DOWN | Manual winch control command |
+| `navigation.anchor.resetRode` | bool | true | Reset chain counter to zero |
+
+### Bow Thruster - Outputs (Device → SignalK)
+| Path | Type | Units | Description |
+|------|------|-------|-------------|
+| `propulsion.bowThruster.status` | int | - | Thruster direction (1=STARBOARD, 0=STOP, -1=PORT) |
+
+### Bow Thruster - Inputs (SignalK → Device)
+| Path | Type | Values | Description |
+|------|------|--------|-------------|
+| `propulsion.bowThruster.command` | int | 1=STARBOARD, 0=STOP, -1=PORT | Bow thruster command |
+
+### Emergency Stop - Both Systems
+| Path | Type | Description |
+|------|------|-------------|
+| `navigation.bow.ecu.emergencyStopCommand` | bool | Command emergency stop (true=activate, false=clear) |
+| `navigation.bow.ecu.emergencyStopStatus` | bool | Current emergency stop state |
 
 ## Usage Examples
 
-### Automatic Deployment (Arm and Fire)
+### Bow Thruster Control (Automatic/SignalK)
+```json
+// Activate bow thruster to starboard
+{"path": "propulsion.bowThruster.command", "value": 1}
+
+// Stop bow thruster
+{"path": "propulsion.bowThruster.command", "value": 0}
+
+// Activate bow thruster to port
+{"path": "propulsion.bowThruster.command", "value": -1}
+```
+
+### Bow Thruster Control (Remote Buttons)
+The physical remote control provides immediate control:
+- **FUNC3 Button**: Activates bow thruster port
+- **FUNC4 Button**: Activates bow thruster starboard
+- **Button Release**: Automatically stops thruster (deadman switch)
+
+### Anchor Windlass - Automatic Deployment (Arm and Fire)
 ```json
 // 1. Arm target (prepare but don't start)
 {"path": "navigation.anchor.targetRodeCommand", "value": 15.0}
@@ -86,25 +126,44 @@ An ESP32-based anchor chain counter and automatic windlass control system with S
 // System will automatically disable when target reached
 ```
 
-### Manual Windlass Control
+### Anchor Windlass - Manual Control
 ```json
 // Retrieve chain
 {"path": "navigation.anchor.manualControl", "value": 1}
-// ... existing content ...
+
+// Stop windlass
+{"path": "navigation.anchor.manualControl", "value": 0}
+
+// Deploy chain
 {"path": "navigation.anchor.manualControl", "value": -1}
 ```
 
-### Physical Remote Control
-The system supports a physical remote control for manual operation. The winch will be active as long as the corresponding remote button is held down.
-- The remote control overrides SignalK manual commands.
-- The remote control will NOT operate if the system is in automatic mode.
-- The `Anchor Home` safety feature remains active, preventing retrieval if the anchor is already home.
+### Physical Remote Control (Anchor)
+The system supports physical remote buttons for anchor control:
+- **UP Button**: Retrieves chain (active while held)
+- **DOWN Button**: Deploys chain (active while held)
+- **Button Release**: Automatically stops winch (deadman switch)
 
-### Emergency Stop
+Note: Remote control takes priority over SignalK commands and automatically disables during automatic mode.
+
+### Emergency Stop (Both Systems)
 ```json
-// Immediately disable automatic mode and stop winch
-{"path": "navigation.anchor.automaticModeCommand", "value": 0}
+// Immediately stop all motors (anchor + bow thruster)
+{"path": "navigation.bow.ecu.emergencyStopCommand", "value": true}
+
+// Resume operations
+{"path": "navigation.bow.ecu.emergencyStopCommand", "value": false}
 ```
+
+## Safety Considerations
+
+1. **Emergency Stop Priority**: Activating emergency stop immediately halts all motors
+2. **Connection Blocking**: SignalK commands are blocked during startup or connection loss (waits for 5-second stable connection)
+3. **Remote Override**: Physical remote buttons take immediate priority over SignalK
+4. **Mutual Exclusion**: Bow thruster can never activate both port and starboard simultaneously
+5. **Idle Safety**: All relay outputs default to inactive (HIGH) on startup or power loss
+
+
 
 ## Documentation
 
@@ -139,14 +198,34 @@ pio test -e test
 
 ### Testing
 
-The project uses the **Unity** test framework with 30+ comprehensive tests covering:
+The project uses the **Unity** test framework with 71 comprehensive tests covering:
+
+**Anchor Windlass Tests** (32 tests)
 - Pulse counting and ISR behavior
 - Physical remote control operations
 - Home sensor safety features
 - Manual and automatic winch control
 - Mode transitions and edge cases
 
-**Note:** Tests mock GPIO hardware but still require an ESP32 board connected via USB to execute. The tests run on the hardware but don't require actual sensors or winches connected.
+**Bow Propeller Tests** (39 tests)
+- Motor hardware control (GPIO, relay logic)
+- Controller command dispatch
+- SignalK command mapping and integration
+- Safety features (mutual exclusion, startup state)
+- Emergency stop integration
+- Remote control integration (FUNC3/FUNC4 buttons)
+- System-level scenarios (multi-control, error recovery)
+
+Run tests with:
+```bash
+# Run all tests on native platform (fast, no hardware required)
+pio test -e native
+
+# Run on connected ESP32 hardware
+pio test
+```
+
+**Note:** Native platform tests don't require sensors or hardware connected, but ESP32 hardware tests require a board connected via USB.
 
 ## License
 

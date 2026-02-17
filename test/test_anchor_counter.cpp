@@ -2,6 +2,64 @@
 #include <Arduino.h>
 #include "pin_config.h"
 
+// Forward declarations for bow propeller tests
+// Motor hardware tests
+extern void test_bow_motor_initializes_pins(void);
+extern void test_bow_motor_turn_port(void);
+extern void test_bow_motor_turn_starboard(void);
+extern void test_bow_motor_stop(void);
+extern void test_bow_motor_mutual_exclusion_port_then_starboard(void);
+extern void test_bow_motor_mutual_exclusion_starboard_then_port(void);
+
+// Controller logic tests
+extern void test_bow_controller_initializes_with_motor(void);
+extern void test_bow_controller_turn_port_command(void);
+extern void test_bow_controller_turn_starboard_command(void);
+extern void test_bow_controller_stop_command(void);
+extern void test_bow_controller_port_to_starboard_switching(void);
+extern void test_bow_controller_repeated_same_command(void);
+
+// SignalK command mapping tests
+extern void test_signalk_command_minus_one_maps_to_port(void);
+extern void test_signalk_command_zero_maps_to_stop(void);
+extern void test_signalk_command_plus_one_maps_to_starboard(void);
+
+// Safety tests
+extern void test_bow_motor_never_activates_both_relays(void);
+extern void test_bow_controller_safe_repeated_stop(void);
+
+// Integration tests
+extern void test_bow_system_rapid_direction_changes(void);
+extern void test_bow_system_stop_after_rapid_changes(void);
+extern void test_bow_startup_always_inactive(void);
+extern void test_bow_controller_state_consistency(void);
+
+// SignalK integration tests
+extern void test_signalk_sends_port_command(void);
+extern void test_signalk_sends_stop_command(void);
+extern void test_signalk_sends_starboard_command(void);
+extern void test_signalk_status_output_reflects_state(void);
+extern void test_signalk_blocks_when_not_connected(void);
+extern void test_signalk_blocks_when_emergency_stop_active(void);
+extern void test_signalk_commands_resume_after_emergency_stop_cleared(void);
+extern void test_signalk_reconnection_resumes_commands(void);
+
+// Emergency stop tests
+extern void test_emergency_stop_blocks_signalk_commands(void);
+extern void test_emergency_stop_blocks_remote_commands(void);
+extern void test_emergency_stop_activation_stops_motor(void);
+extern void test_emergency_stop_counts_blocked_attempts(void);
+
+// Remote control integration tests
+extern void test_remote_func3_button_activates_port(void);
+extern void test_remote_func4_button_activates_starboard(void);
+extern void test_remote_button_release_stops_motor(void);
+
+// System-level integration tests
+extern void test_signalk_and_remote_can_coexist(void);
+extern void test_emergency_stop_blocks_both_signalk_and_remote(void);
+extern void test_full_scenario_normal_operation(void);
+
 // Mock GPIO states for testing
 bool mock_gpio_states[40] = {false};
 int mock_gpio_modes[40] = {0};
@@ -756,7 +814,67 @@ void setup() {
     RUN_TEST(test_physical_remote_blocked_in_auto_mode);
     RUN_TEST(test_remote_buttons_priority);
     
-    // Manual/Automatic mode tests
+    // ========== BOW PROPELLER TESTS ==========
+    
+    // Bow motor hardware tests
+    RUN_TEST(test_bow_motor_initializes_pins);
+    RUN_TEST(test_bow_motor_turn_port);
+    RUN_TEST(test_bow_motor_turn_starboard);
+    RUN_TEST(test_bow_motor_stop);
+    RUN_TEST(test_bow_motor_mutual_exclusion_port_then_starboard);
+    RUN_TEST(test_bow_motor_mutual_exclusion_starboard_then_port);
+    
+    // Bow controller logic tests
+    RUN_TEST(test_bow_controller_initializes_with_motor);
+    RUN_TEST(test_bow_controller_turn_port_command);
+    RUN_TEST(test_bow_controller_turn_starboard_command);
+    RUN_TEST(test_bow_controller_stop_command);
+    RUN_TEST(test_bow_controller_port_to_starboard_switching);
+    RUN_TEST(test_bow_controller_repeated_same_command);
+    
+    // Bow SignalK command mapping tests
+    RUN_TEST(test_signalk_command_minus_one_maps_to_port);
+    RUN_TEST(test_signalk_command_zero_maps_to_stop);
+    RUN_TEST(test_signalk_command_plus_one_maps_to_starboard);
+    
+    // Bow safety tests
+    RUN_TEST(test_bow_motor_never_activates_both_relays);
+    RUN_TEST(test_bow_controller_safe_repeated_stop);
+    
+    // Bow system integration tests
+    RUN_TEST(test_bow_system_rapid_direction_changes);
+    RUN_TEST(test_bow_system_stop_after_rapid_changes);
+    RUN_TEST(test_bow_startup_always_inactive);
+    RUN_TEST(test_bow_controller_state_consistency);
+    
+    // Bow SignalK integration tests
+    RUN_TEST(test_signalk_sends_port_command);
+    RUN_TEST(test_signalk_sends_stop_command);
+    RUN_TEST(test_signalk_sends_starboard_command);
+    RUN_TEST(test_signalk_status_output_reflects_state);
+    RUN_TEST(test_signalk_blocks_when_not_connected);
+    RUN_TEST(test_signalk_blocks_when_emergency_stop_active);
+    RUN_TEST(test_signalk_commands_resume_after_emergency_stop_cleared);
+    RUN_TEST(test_signalk_reconnection_resumes_commands);
+    
+    // Bow emergency stop tests
+    RUN_TEST(test_emergency_stop_blocks_signalk_commands);
+    RUN_TEST(test_emergency_stop_blocks_remote_commands);
+    RUN_TEST(test_emergency_stop_activation_stops_motor);
+    RUN_TEST(test_emergency_stop_counts_blocked_attempts);
+    
+    // Bow remote control integration tests
+    RUN_TEST(test_remote_func3_button_activates_port);
+    RUN_TEST(test_remote_func4_button_activates_starboard);
+    RUN_TEST(test_remote_button_release_stops_motor);
+    
+    // Bow system-level integration tests
+    RUN_TEST(test_signalk_and_remote_can_coexist);
+    RUN_TEST(test_emergency_stop_blocks_both_signalk_and_remote);
+    RUN_TEST(test_full_scenario_normal_operation);
+    
+    // ========== ANCHOR WINCH TESTS ==========
+    
     RUN_TEST(test_system_defaults_to_manual_mode);
     RUN_TEST(test_manual_mode_allows_control);
     RUN_TEST(test_automatic_mode_blocks_manual_control);

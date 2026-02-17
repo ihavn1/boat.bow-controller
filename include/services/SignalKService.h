@@ -4,6 +4,7 @@
 #include "PulseCounterService.h"
 #include "EmergencyStopService.h"
 #include "winch_controller.h"
+#include "bow_propeller_controller.h"
 #include "home_sensor.h"
 #include "automatic_mode_controller.h"
 #include "sensesp/signalk/signalk_output.h"
@@ -30,13 +31,15 @@ public:
      * @param auto_mode_controller Pointer to automatic mode controller
      * @param emergency_stop_service Pointer to emergency stop service
      * @param pulse_counter_service Pointer to pulse counter service
+     * @param bow_propeller_controller Pointer to bow propeller controller (can be nullptr)
      */
     SignalKService(StateManager& state_manager,
-                   WinchController& winch_controller,
+                   AnchorWinchController& winch_controller,
                    HomeSensor& home_sensor,
                    AutomaticModeController* auto_mode_controller,
                    EmergencyStopService* emergency_stop_service,
-                   PulseCounterService* pulse_counter_service);
+                   PulseCounterService* pulse_counter_service,
+                   BowPropellerController* bow_propeller_controller = nullptr);
 
     /**
      * @brief Initialize all SignalK listeners and outputs
@@ -64,11 +67,12 @@ public:
 private:
     // ========== Dependencies ==========
     StateManager& state_manager_;
-    WinchController& winch_controller_;
+    AnchorWinchController& winch_controller_;
     HomeSensor& home_sensor_;
     AutomaticModeController* auto_mode_controller_;
     EmergencyStopService* emergency_stop_service_;
     PulseCounterService* pulse_counter_service_;
+    BowPropellerController* bow_propeller_controller_;
 
     // ========== SignalK Outputs ==========
     SKOutputFloat* rode_output_ = nullptr;
@@ -78,6 +82,8 @@ private:
     SKOutputFloat* auto_mode_output_ = nullptr;
     SKOutputFloat* target_output_ = nullptr;
     SKOutputBool* home_command_output_ = nullptr;
+    SKOutputInt* bow_propeller_command_output_ = nullptr;
+    SKOutputInt* bow_propeller_status_output_ = nullptr;
 
     // ========== Connection Monitoring ==========
     unsigned long connection_stable_time_ = 0;
@@ -88,4 +94,5 @@ private:
     void setupManualControlBindings();
     void setupAutoModeBindings();
     void setupHomeCommandBindings();
+    void setupBowPropellerBindings();
 };

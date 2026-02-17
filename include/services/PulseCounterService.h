@@ -24,12 +24,12 @@ public:
     /**
      * @brief Construct pulse counter service
      * @param state_manager Reference to state manager (for state updates)
-     * @param winch_controller Reference to winch controller
+     * @param winch_controller Reference to anchor winch controller
      * @param home_sensor Reference to home sensor
      * @param read_delay_ms Delay between pulse count reads (milliseconds)
      */
     PulseCounterService(StateManager& state_manager,
-                        WinchController& winch_controller,
+                        AnchorWinchController& winch_controller,
                         HomeSensor& home_sensor,
                         unsigned int read_delay_ms = 100)
         : state_manager_(state_manager),
@@ -59,7 +59,7 @@ public:
 
 private:
     StateManager& state_manager_;             ///< State holder (reads/writes state)
-    WinchController& winch_controller_;       ///< Winch controller (to stop on home)
+    AnchorWinchController& winch_controller_;       ///< Anchor winch controller (to stop on home)
     HomeSensor& home_sensor_;                 ///< Home sensor (to detect arrival)
     unsigned int read_delay_ms_;                      ///< Update interval in milliseconds
     unsigned long last_debug_ms_ = 0;         ///< Throttle debug output

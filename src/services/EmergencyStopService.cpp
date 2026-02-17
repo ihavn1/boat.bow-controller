@@ -17,6 +17,9 @@ void EmergencyStopService::setActive(bool active, const char* reason) {
     if (active) {
         // Emergency stop activated
         winch_controller_.stop();
+        if (bow_propeller_controller_) {
+            bow_propeller_controller_->stop();
+        }
         state_manager_.setAutoModeEnabled(false);
         state_manager_.setManualControl(0);  // Stop manual control
         

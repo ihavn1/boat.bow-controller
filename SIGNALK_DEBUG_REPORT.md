@@ -1,5 +1,14 @@
 # SignalK Status Output Debug Report
 
+## System Scope
+
+This report covers SignalK integration for both:
+- **Anchor Windlass System**: Chain deployment/retrieval with automatic positioning
+- **Bow Thruster System**: Port/starboard directional control
+- **Emergency Stop**: Unified safety system affecting both subsystems
+
+---
+
 ## Issues Found
 
 ### 1. **Emergency Stop Status Never Updates in SignalK**
@@ -36,14 +45,16 @@ if (emergency_stop_service_) {
 **Problem**:
 - `manual_control_output_` updated only when command received via SignalK listener
 - **Missing**: No update when motor stops due to:
-  - Home sensor blocking
+  - Home sensor blocking (anchor)
   - Emergency stop activated
   - Physical remote released
-- Result: SignalK shows last command (e.g., "UP") even though motor stopped
+  - Mutual exclusion (bow thruster switched directions)
+- Result: SignalK shows last command even though motor stopped
 
 **Fix Needed**:
-- Subscribe to winch controller state changes
-- Update `manual_control_output_` to 0 (STOP) when motor becomes inactive
+- Subscribe to anchor winch controller state changes
+- Subscribe to bow thruster controller state changes
+- Update control status outputs to 0 (STOP) when motors become inactive
 
 ---
 
@@ -65,7 +76,28 @@ if (emergency_stop_service_) {
 
 ---
 
-### 4. **Rode Length Update Only Periodic (Every 1 Second)**
+### 4. **Bow Thruster Status Not Updated When Motor Stops**
+
+**Location**: Implementation omission for bow thruster status
+
+**Problem**:
+- Bow thruster status only emitted when command received via SignalK
+- **Missing**: No update when motor stops due to:
+  - Emergency stop activation
+  - Physical remote button release (deadman switch)
+  - Direction change (mutual exclusion affects previous direction)
+- Result: SignalK shows outdated thruster state (not reflecting actual motor status)
+
+**Affected Path**: `propulsion.bowThruster.status`
+
+**Fix Needed**:
+- Add listener to BowPropellerController state changes
+- Update `bow_thruster_status_value_` whenever motor state changes
+- Ensure status reflects actual direction: 1=STARBOARD, 0=STOP, -1=PORT
+
+---
+
+### 5. **Rode Length Update Only Periodic (Every 1 Second)**
 
 **Location**: [src/services/SignalKService.cpp](src/services/SignalKService.cpp#L35-L37)
 
@@ -81,7 +113,7 @@ if (emergency_stop_service_) {
 
 ---
 
-### 5. **Target Rode Status Not Cleared After Target Reached**
+### 6. **Target Rode Status Not Cleared After Target Reached**
 
 **Location**: [src/services/SignalKService.cpp](src/services/SignalKService.cpp#L165-L192)
 
@@ -98,13 +130,14 @@ if (emergency_stop_service_) {
 
 ## Summary: Status Output Sync Issues
 
-| Output | Path | Current Status | Issue |
-|--------|------|---|---|
-| Rode Length | navigation.anchor.currentRode | Periodic (1s) | Slow feedback |
-| Emergency Stop | navigation.bow.ecu.emergencyStopStatus | Listener only | Doesn't sync from service |
-| Manual Control | navigation.anchor.manualControlStatus | Listener only | Not cleared when motor stops |
-| Auto Mode | navigation.anchor.automaticModeStatus | Listener only | Not synced from controller |
-| Target Rode | navigation.anchor.targetRodeStatus | Listener only | Not cleared on completion |
+| System | Output | Path | Current Status | Issue |
+|--------|--------|------|---|---|
+| Anchor | Rode Length | navigation.anchor.currentRode | Periodic (1s) | Slow feedback |
+| Anchor | Emergency Stop | navigation.bow.ecu.emergencyStopStatus | Listener only | Doesn't sync from service |
+| Anchor | Manual Control | navigation.anchor.manualControlStatus | Listener only | Not cleared when motor stops |
+| Anchor | Auto Mode | navigation.anchor.automaticModeStatus | Listener only | Not synced from controller |
+| Anchor | Target Rode | navigation.anchor.targetRodeStatus | Listener only | Not cleared on completion |
+| Bow | Thruster Status | propulsion.bowThruster.status | Listener only | Not updated on motor stop |
 
 ---
 
@@ -112,24 +145,31 @@ if (emergency_stop_service_) {
 
 ### Immediate (High Impact):
 1. **Emergency Stop**: Poll service state in `startConnectionMonitoring()` (alongside WiFi check)
-2. **Manual Control**: Add listener to WinchController state changes
-3. **Auto Mode**: Poll controller state in main monitoring loop
+2. **Windlass Manual Control**: Add listener to AnchorWinchController state changes
+3. **Bow Thruster Status**: Add listener to BowPropellerController state changes
+4. **Auto Mode**: Poll controller state in main monitoring loop
 
 ### Nice-to-Have:
-4. Increase rode length update frequency (if responsiveness needed)
-5. Clear target when auto mode completes
+5. Increase rode length update frequency (if responsiveness needed)
+6. Clear target when auto mode completes
 
 ---
 
 ## Code Locations to Modify
 
-1. **src/services/SignalKService.h**: May need callbacks in dependencies
+1. **src/services/SignalKService.h**: 
+   - Add `bow_thruster_status_value_` if not present
+   - May need callbacks in dependencies
+
 2. **src/services/SignalKService.cpp**:
    - `setupEmergencyStopBindings()` - add service state polling
-   - `setupManualControlBindings()` - add motor state listener
+   - `setupManualControlBindings()` - add winch motor state listener
+   - `setupBowPropellerBindings()` - add thruster motor state listener and status updates
    - `setupAutoModeBindings()` - track controller state
    - `startConnectionMonitoring()` - expand monitoring loop
 
 3. **src/services/EmergencyStopService.h/cpp**: May need state change callback
 4. **src/winch_controller.h/cpp**: May need state change callback
+5. **src/bow_propeller_controller.h/cpp**: May need state change callback
+
 

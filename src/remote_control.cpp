@@ -1,19 +1,30 @@
 #include "remote_control.h"
 
 RemoteControl::RemoteControl(StateManager& state_manager,
-                             WinchController& winch,
+                             AnchorWinchController& winch,
                              AutomaticModeController* auto_mode_controller,
                              SKOutputFloat* auto_mode_output_ptr)
     : state_manager_(state_manager),
       winch_(winch),
       auto_mode_controller_(auto_mode_controller),
-      auto_mode_output_ptr_(auto_mode_output_ptr) {}
+      auto_mode_output_ptr_(auto_mode_output_ptr),
+      bow_propeller_controller_(nullptr) {}
 
 void RemoteControl::initialize() {
+    // Winch remote inputs
     pinMode(PinConfig::REMOTE_UP, INPUT);
     pinMode(PinConfig::REMOTE_DOWN, INPUT);
+    
+    // Bow propeller remote inputs
     pinMode(PinConfig::REMOTE_FUNC3, INPUT);
     pinMode(PinConfig::REMOTE_FUNC4, INPUT);
+    
+    // Bow propeller relay outputs (inactive HIGH for active-LOW safety)
+    pinMode(PinConfig::BOW_PORT, OUTPUT);
+    digitalWrite(PinConfig::BOW_PORT, HIGH);
+    
+    pinMode(PinConfig::BOW_STARBOARD, OUTPUT);
+    digitalWrite(PinConfig::BOW_STARBOARD, HIGH);
 }
 
 bool RemoteControl::processInputs() {
@@ -57,6 +68,9 @@ bool RemoteControl::processInputs() {
             winch_.stop();
             remote_active_ = false;
         }
+        if (bow_propeller_controller_) {
+            bow_propeller_controller_->stop();
+        }
         return false;
     }
 
@@ -85,6 +99,22 @@ bool RemoteControl::processInputs() {
         remote_active_ = false;
         return true;
     }
+    
+    // Bow propeller control (FUNC3 = PORT, FUNC4 = STARBOARD)
+    if (bow_propeller_controller_) {
+        if (func3_pressed) {
+            bow_propeller_controller_->turnPort();
+            return true;
+        } else if (func4_pressed) {
+            bow_propeller_controller_->turnStarboard();
+            return true;
+        } else if (bow_propeller_controller_->isActive()) {
+            // Button released - stop bow propeller
+            bow_propeller_controller_->stop();
+            return true;
+        }
+    }
+    
     // Neither button pressed and remote was not controlling - do nothing
     return false;
 }
@@ -95,4 +125,8 @@ void RemoteControl::setAutoModeController(AutomaticModeController* auto_mode_con
 
 void RemoteControl::setAutoModeOutput(SKOutputFloat* auto_mode_output_ptr) {
     auto_mode_output_ptr_ = auto_mode_output_ptr;
+}
+
+void RemoteControl::setBowPropellerController(BowPropellerController* bow_propeller_controller) {
+    bow_propeller_controller_ = bow_propeller_controller;
 }

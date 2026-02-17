@@ -27,7 +27,11 @@ struct PinConfig {
     static constexpr uint8_t REMOTE_FUNC3 = 15; ///< Spare remote input (future use)
     static constexpr uint8_t REMOTE_FUNC4 = 16; ///< Spare remote input (future use)
     
-    // Remote control outputs (active-LOW: write LOW to activate, HIGH to deactivate)
-    static constexpr uint8_t REMOTE_OUT1 = 4;   ///< Spare remote output 1
-    static constexpr uint8_t REMOTE_OUT2 = 5;   ///< Spare remote output 2
+    // Bow propeller relays (active-LOW: write LOW to activate, HIGH to deactivate)
+    static constexpr uint8_t BOW_PORT = 4;      ///< Bow propeller port (left) thruster relay
+    static constexpr uint8_t BOW_STARBOARD = 5; ///< Bow propeller starboard (right) thruster relay
+    
+    // Legacy aliases for backward compatibility
+    static constexpr uint8_t REMOTE_OUT1 = BOW_PORT;       ///< Alias for BOW_PORT
+    static constexpr uint8_t REMOTE_OUT2 = BOW_STARBOARD;  ///< Alias for BOW_STARBOARD
 };

@@ -3,7 +3,7 @@
 
 using namespace sensesp;
 
-AutomaticModeController::AutomaticModeController(WinchController& winch, HomeSensor& home_sensor)
+AutomaticModeController::AutomaticModeController(AnchorWinchController& winch, HomeSensor& home_sensor)
     : winch_(winch),
       home_sensor_(home_sensor),
       enabled_(false),

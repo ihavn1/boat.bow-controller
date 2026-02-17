@@ -5,11 +5,11 @@
 
 /**
  * @file winch_controller.h
- * @brief Manages winch motor control with built-in safety checks
+ * @brief Manages anchor winch motor control with built-in safety checks
  * 
- * This class encapsulates all winch control logic, including:
+ * This class encapsulates all anchor winch control logic, including:
  * - Motor control via IMotor interface (abstracted hardware)
- * - Home sensor safety blocking (prevents over-retrieval)
+ * - Home sensor safety blocking (prevents over-retrieval of anchor chain)
  * 
  * DESIGN PRINCIPLE: Dependency Injection + Dependency Inversion
  * - Depends on IMotor and ISensor interfaces, not concrete GPIO implementations
@@ -19,14 +19,14 @@
  * SAFETY: Motor outputs use active-LOW logic. Pins default to HIGH (inactive)
  * on boot, ensuring the motor cannot start accidentally.
  */
-class WinchController {
+class AnchorWinchController {
 public:
     /**
-     * @brief Construct winch controller with dependency injection
+     * @brief Construct anchor winch controller with dependency injection
      * @param motor Reference to motor implementation (e.g., ESP32Motor)
      * @param home_sensor Reference to home sensor implementation (e.g., ESP32Sensor<PIN>)
      */
-    WinchController(IMotor& motor, ISensor& home_sensor)
+    AnchorWinchController(IMotor& motor, ISensor& home_sensor)
         : motor_(motor), home_sensor_(home_sensor) {}
 
     /**

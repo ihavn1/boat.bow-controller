@@ -1,8 +1,8 @@
-#include "services/BoatAnchorApp.h"
+#include "services/BoatBowControlApp.h"
 #include "services/SignalKService.h"
 
 // Global app instance (needed for ISR access)
-static BoatAnchorApp* g_app = nullptr;
+static BoatBowControlApp* g_app = nullptr;
 
 void emergencyStopChangedThunk(bool is_active, const char* reason) {
     if (g_app) {
@@ -24,7 +24,7 @@ void IRAM_ATTR pulseISR() {
     }
 }
 
-BoatAnchorApp::BoatAnchorApp()
+BoatBowControlApp::BoatBowControlApp()
     : motor_(),
       home_sensor_impl_(),
       winch_controller_(motor_, home_sensor_impl_),
@@ -32,23 +32,26 @@ BoatAnchorApp::BoatAnchorApp()
     g_app = this;  // Store global pointer for ISR
 }
 
-void BoatAnchorApp::initialize() {
+void BoatBowControlApp::initialize() {
     initializeHardware();
     initializeControllers();
     initializeServices();
     attachPulseISR();
 
-    debugD("=== Boat Anchor App Initialized ===");
+    debugD("=== Boat Bow Control App Initialized ===");
     debugD("Pulse input: GPIO %d, Direction: GPIO %d", 
            PinConfig::PULSE_INPUT, PinConfig::DIRECTION);
     debugD("Winch: UP=GPIO %d, DOWN=GPIO %d", 
            PinConfig::WINCH_UP, PinConfig::WINCH_DOWN);
     debugD("Home sensor: GPIO %d", PinConfig::ANCHOR_HOME);
-    debugD("Remote outputs: OUT1=GPIO %d, OUT2=GPIO %d", 
-           PinConfig::REMOTE_OUT1, PinConfig::REMOTE_OUT2);
+    debugD("Bow propeller: PORT=GPIO %d, STARBOARD=GPIO %d", 
+           PinConfig::BOW_PORT, PinConfig::BOW_STARBOARD);
+    debugD("Remote inputs: UP=GPIO %d, DOWN=GPIO %d, FUNC3=GPIO %d, FUNC4=GPIO %d",
+           PinConfig::REMOTE_UP, PinConfig::REMOTE_DOWN,
+           PinConfig::REMOTE_FUNC3, PinConfig::REMOTE_FUNC4);
 }
 
-void BoatAnchorApp::startSignalK() {
+void BoatBowControlApp::startSignalK() {
     if (!signalk_service_) {
         debugD("ERROR: SignalK service not initialized!");
         return;
@@ -58,7 +61,7 @@ void BoatAnchorApp::startSignalK() {
     debugD("SignalK integration started - waiting for connection...");
 }
 
-void BoatAnchorApp::processInputs() {
+void BoatBowControlApp::processInputs() {
     // Process physical remote control inputs
     if (remote_control_) {
         remote_control_->processInputs();
@@ -68,23 +71,20 @@ void BoatAnchorApp::processInputs() {
     event_loop()->tick();
 }
 
-void BoatAnchorApp::initializeHardware() {
+void BoatBowControlApp::initializeHardware() {
     // SAFETY FIRST: Initialize all hardware to safe inactive state
     
     // Initialize motor first
     motor_.initialize();
     home_sensor_impl_.initialize();
     
-    // Initialize remote spare outputs (active-LOW logic)
-    pinMode(PinConfig::REMOTE_OUT1, OUTPUT);
-    pinMode(PinConfig::REMOTE_OUT2, OUTPUT);
-    digitalWrite(PinConfig::REMOTE_OUT1, HIGH);
-    digitalWrite(PinConfig::REMOTE_OUT2, HIGH);
+    // Initialize bow propeller motor
+    bow_propeller_motor_.initialize();
 
     debugD("Hardware initialized - all outputs inactive");
 }
 
-void BoatAnchorApp::initializeControllers() {
+void BoatBowControlApp::initializeControllers() {
     // Initialize automatic mode controller
     auto_mode_controller_ = new AutomaticModeController(winch_controller_, home_sensor_);
     state_manager_.setMetersPerPulse(0.01f);
@@ -93,13 +93,21 @@ void BoatAnchorApp::initializeControllers() {
     // Initialize remote control
     remote_control_ = new RemoteControl(state_manager_, winch_controller_);
     remote_control_->initialize();
+    
+    // Initialize bow propeller controller
+    bow_propeller_controller_ = new BowPropellerController(bow_propeller_motor_);
+    
+    // Wire bow propeller to remote control
+    remote_control_->setBowPropellerController(bow_propeller_controller_);
 
     debugD("Controllers initialized");
 }
 
-void BoatAnchorApp::initializeServices() {
+void BoatBowControlApp::initializeServices() {
     // Initialize emergency stop service (without callback - SignalK will handle updates)
     emergency_stop_service_ = new EmergencyStopService(state_manager_, winch_controller_);
+    // Wire bow propeller to emergency stop service
+    emergency_stop_service_->setBowPropellerController(bow_propeller_controller_);
     // Use a thunk to forward the callback to the app instance
     emergency_stop_service_->onStateChange(emergencyStopChangedThunk);
     
@@ -108,16 +116,16 @@ void BoatAnchorApp::initializeServices() {
                                                       home_sensor_, 100);
     pulse_counter_service_->initialize();
     
-    // Initialize SignalK service
+    // Initialize SignalK service with bow propeller controller
     signalk_service_ = new SignalKService(state_manager_, winch_controller_, home_sensor_,
                                          auto_mode_controller_, emergency_stop_service_,
-                                         pulse_counter_service_);
+                                         pulse_counter_service_, bow_propeller_controller_);
     signalk_service_->initialize();
 
     debugD("Services initialized");
 }
 
-void BoatAnchorApp::attachPulseISR() {
+void BoatBowControlApp::attachPulseISR() {
     // Configure the pulse input pin and direction pin
     pinMode(PinConfig::PULSE_INPUT, INPUT_PULLUP);
     pinMode(PinConfig::DIRECTION, INPUT_PULLUP);
@@ -126,7 +134,7 @@ void BoatAnchorApp::attachPulseISR() {
     debugD("Pulse ISR attached to GPIO %d", PinConfig::PULSE_INPUT);
 }
 
-void BoatAnchorApp::onEmergencyStopChanged(bool is_active, const char* reason) {
+void BoatBowControlApp::onEmergencyStopChanged(bool is_active, const char* reason) {
     // Update SignalK status when emergency stop state changes
     if (signalk_service_) {
         auto status_value = signalk_service_->getEmergencyStopStatus();

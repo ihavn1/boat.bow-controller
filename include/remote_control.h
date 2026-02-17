@@ -4,6 +4,7 @@
 #include "pin_config.h"
 #include "winch_controller.h"
 #include "automatic_mode_controller.h"
+#include "bow_propeller_controller.h"
 #include "services/StateManager.h"
 #include "sensesp/signalk/signalk_output.h"
 
@@ -11,13 +12,19 @@ using namespace sensesp;
 
 /**
  * @file remote_control.h
- * @brief Handles physical remote control inputs for manual winch operation
+ * @brief Handles physical remote control inputs for winch and bow propeller
  * 
  * This class processes inputs from a physical remote control (wired buttons).
- * The remote operates in a "deadman switch" mode:
- * - Winch runs only while a button is held down
- * - Winch stops immediately when button is released
+ * The remote operates in a "deadman switch" mode for all functions:
+ * - Control runs only while a button is held down
+ * - Control stops immediately when button is released
  * - Remote overrides automatic mode (disables it immediately on button press)
+ * 
+ * Button Mapping:
+ * - GPIO 12 (REMOTE_UP): Winch UP
+ * - GPIO 13 (REMOTE_DOWN): Winch DOWN
+ * - GPIO 15 (REMOTE_FUNC3): Bow propeller PORT
+ * - GPIO 16 (REMOTE_FUNC4): Bow propeller STARBOARD
  * 
  * Hardware: Remote buttons are active-HIGH (read HIGH when pressed)
  */
@@ -31,7 +38,7 @@ public:
      * @param auto_mode_output_ptr Pointer to auto mode SignalK output (can be nullptr)
      */
     RemoteControl(StateManager& state_manager,
-                  WinchController& winch, 
+                  AnchorWinchController& winch, 
                   AutomaticModeController* auto_mode_controller = nullptr,
                   SKOutputFloat* auto_mode_output_ptr = nullptr);
 
@@ -65,11 +72,18 @@ public:
      */
     void setAutoModeOutput(SKOutputFloat* auto_mode_output_ptr);
 
+    /**
+     * @brief Set the bow propeller controller pointer
+     * @param bow_propeller_controller Pointer to bow propeller controller
+     */
+    void setBowPropellerController(BowPropellerController* bow_propeller_controller);
+
 private:
     StateManager& state_manager_;  ///< Reference to state manager
-    WinchController& winch_;  ///< Reference to winch controller
+    AnchorWinchController& winch_;  ///< Reference to anchor winch controller
     AutomaticModeController* auto_mode_controller_;  ///< Pointer to auto mode controller
     SKOutputFloat* auto_mode_output_ptr_;  ///< Pointer to auto mode SignalK output
+    BowPropellerController* bow_propeller_controller_;  ///< Pointer to bow propeller controller
     bool remote_active_ = false;  ///< True if remote is currently controlling the winch
     bool prev_button_active_ = false;  ///< Previous combined button state for edge detection
     unsigned long last_press_ms_ = 0;  ///< Time of last button press

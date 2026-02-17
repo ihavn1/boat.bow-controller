@@ -29,7 +29,7 @@ public:
     float auto_mode_target_ = 0.0f;
 };
 
-class MockWinchController {
+class MockAnchorWinchController {
 public:
     void moveUp() { is_active_ = true; direction_ = 1; }
     void moveDown() { is_active_ = true; direction_ = -1; }
@@ -72,7 +72,7 @@ public:
 class TestSignalKService {
 public:
     TestSignalKService(MockStateManager& state_manager,
-                      MockWinchController& winch_controller,
+                      MockAnchorWinchController& winch_controller,
                       MockHomeSensor& home_sensor,
                       MockAutomaticModeController* auto_mode_controller,
                       MockEmergencyStopService* emergency_stop_service,
@@ -141,7 +141,7 @@ public:
     
 private:
     MockStateManager& state_manager_;
-    MockWinchController& winch_controller_;
+    MockAnchorWinchController& winch_controller_;
     MockHomeSensor& home_sensor_;
     MockAutomaticModeController* auto_mode_controller_;
     MockEmergencyStopService* emergency_stop_service_;
@@ -156,7 +156,7 @@ private:
 
 void test_signalk_service_initialization() {
     MockStateManager state_mgr;
-    MockWinchController winch;
+    MockAnchorWinchController winch;
     MockHomeSensor home;
     MockAutomaticModeController auto_mode;
     MockEmergencyStopService emergency;
@@ -172,7 +172,7 @@ void test_signalk_service_initialization() {
 
 void test_rode_length_output() {
     MockStateManager state_mgr;
-    MockWinchController winch;
+    MockAnchorWinchController winch;
     MockHomeSensor home;
     MockAutomaticModeController auto_mode;
     MockEmergencyStopService emergency;
@@ -189,7 +189,7 @@ void test_rode_length_output() {
 
 void test_emergency_stop_status() {
     MockStateManager state_mgr;
-    MockWinchController winch;
+    MockAnchorWinchController winch;
     MockHomeSensor home;
     MockAutomaticModeController auto_mode;
     MockEmergencyStopService emergency;
@@ -207,7 +207,7 @@ void test_emergency_stop_status() {
 
 void test_manual_control_up() {
     MockStateManager state_mgr;
-    MockWinchController winch;
+    MockAnchorWinchController winch;
     MockHomeSensor home;
     MockAutomaticModeController auto_mode;
     MockEmergencyStopService emergency;
@@ -225,7 +225,7 @@ void test_manual_control_up() {
 
 void test_manual_control_down() {
     MockStateManager state_mgr;
-    MockWinchController winch;
+    MockAnchorWinchController winch;
     MockHomeSensor home;
     MockAutomaticModeController auto_mode;
     MockEmergencyStopService emergency;
@@ -243,7 +243,7 @@ void test_manual_control_down() {
 
 void test_manual_control_stop() {
     MockStateManager state_mgr;
-    MockWinchController winch;
+    MockAnchorWinchController winch;
     MockHomeSensor home;
     MockAutomaticModeController auto_mode;
     MockEmergencyStopService emergency;

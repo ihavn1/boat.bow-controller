@@ -2,9 +2,9 @@
   {
     "id": "b0f0a1b2c3d4e5f6",
     "type": "tab",
-    "label": "Bow Controller Test",
+    "label": "Boat Control Test",
     "disabled": false,
-    "info": "Node-RED flow for testing bow-controller SignalK paths"
+    "info": "Node-RED flow for testing boat controller SignalK paths (anchor winch + bow thruster)"
   },
   {
     "id": "c0a1b2c3d4e5f6a7",
@@ -367,6 +367,93 @@
     ]
   },
   {
+    "id": "inj-bow-port",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Bow: PORT (-1)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "propulsion.bowThruster.command",
+    "payload": "-1",
+    "payloadType": "num",
+    "x": 150,
+    "y": 560,
+    "wires": [
+      [
+        "fn-delta-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-bow-stop",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Bow: STOP (0)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "propulsion.bowThruster.command",
+    "payload": "0",
+    "payloadType": "num",
+    "x": 160,
+    "y": 600,
+    "wires": [
+      [
+        "fn-delta-0001"
+      ]
+    ]
+  },
+  {
+    "id": "inj-bow-starboard",
+    "type": "inject",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Bow: STARBOARD (1)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "propulsion.bowThruster.command",
+    "payload": "1",
+    "payloadType": "num",
+    "x": 180,
+    "y": 640,
+    "wires": [
+      [
+        "fn-delta-0001"
+      ]
+    ]
+  },
+  {
     "id": "c0a1b2c3d4e5f6b8",
     "type": "comment",
     "z": "b0f0a1b2c3d4e5f6",
@@ -534,6 +621,38 @@
     "statusType": "auto",
     "x": 450,
     "y": 680,
+    "wires": []
+  },
+  {
+    "id": "sk-sub-bow-status",
+    "type": "signalk-subscribe",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "Subscribe: bowThrusterStatus",
+    "path": "propulsion.bowThruster.status",
+    "period": 500,
+    "x": 210,
+    "y": 720,
+    "wires": [
+      [
+        "dbg-bow-status"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-bow-status",
+    "type": "debug",
+    "z": "b0f0a1b2c3d4e5f6",
+    "name": "bowThrusterStatus",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload.updates[0].values[0].value",
+    "targetType": "msg",
+    "statusVal": "payload.updates[0].values[0].value",
+    "statusType": "auto",
+    "x": 420,
+    "y": 720,
     "wires": []
   },
   {

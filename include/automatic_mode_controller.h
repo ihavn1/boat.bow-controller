@@ -23,7 +23,7 @@ public:
      * @param winch Reference to winch controller (dependency injection)
      * @param home_sensor Reference to home sensor for auto-home safety
      */
-    AutomaticModeController(WinchController& winch, HomeSensor& home_sensor);
+    AutomaticModeController(AnchorWinchController& winch, HomeSensor& home_sensor);
 
     /**
      * @brief Enable or disable automatic mode
@@ -70,7 +70,7 @@ public:
     void update(float current_length);
 
 private:
-    WinchController& winch_;           ///< Reference to winch controller
+    AnchorWinchController& winch_;     ///< Reference to anchor winch controller
     HomeSensor& home_sensor_;          ///< Reference to home sensor
     bool enabled_;                     ///< True if automatic mode is active
     float target_length_;              ///< Target rode length in meters

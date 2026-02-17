@@ -5,7 +5,9 @@
 #include "EmergencyStopService.h"
 #include "hardware/ESP32Motor.h"
 #include "hardware/ESP32Sensor.h"
+#include "hardware/ESP32BowPropellerMotor.h"
 #include "winch_controller.h"
+#include "bow_propeller_controller.h"
 #include "home_sensor.h"
 #include "automatic_mode_controller.h"
 #include "remote_control.h"
@@ -15,31 +17,31 @@
 class SignalKService;
 
 /**
- * @file BoatAnchorApp.h
- * @brief Main application orchestrator for the anchor chain counter system
+ * @file BoatBowControlApp.h
+ * @brief Main application orchestrator for anchor and bow control systems
  * 
  * Coordinates initialization and management of all system components:
- * - Hardware abstraction (motor, sensors)
- * - Business logic controllers (winch, home, auto mode, remote)
+ * - Hardware abstraction (motors, sensors, relays)
+ * - Business logic controllers (winch, home, auto mode, remote, bow propeller)
  * - Service layer (state management, emergency stop, pulse counting, SignalK)
  * 
  * Follows the orchestrator pattern to encapsulate system complexity and provide
  * a simple interface for setup and operation.
  */
-class BoatAnchorApp {
+class BoatBowControlApp {
 public:
     /**
      * @brief Construct the application without initializing
      * Call initialize() afterwards in setup()
      */
-    BoatAnchorApp();
+    BoatBowControlApp();
 
     /**
      * @brief Initialize all hardware and services
      * Must be called during Arduino setup()
      * Initializes (in order):
      *   1. Hardware (GPIO, pins)
-     *   2. Controllers (WinchController, HomeSensor, AutomaticModeController, RemoteControl)
+     *   2. Controllers (AnchorWinchController, HomeSensor, AutomaticModeController, RemoteControl, BowPropeller)
      *   3. Services (EmergencyStopService, PulseCounterService)
      *   4. Pulse counter ISR
      * 
@@ -67,9 +69,9 @@ public:
     StateManager& getStateManager() { return state_manager_; }
 
     /**
-     * @brief Get the winch controller
+     * @brief Get the anchor winch controller
      */
-    WinchController& getWinchController() { return winch_controller_; }
+    AnchorWinchController& getWinchController() { return winch_controller_; }
 
     /**
      * @brief Get the home sensor
@@ -85,6 +87,11 @@ public:
      * @brief Get the remote control
      */
     RemoteControl* getRemoteControl() { return remote_control_; }
+
+    /**
+     * @brief Get the bow propeller controller
+     */
+    BowPropellerController* getBowPropellerController() { return bow_propeller_controller_; }
 
     /**
      * @brief Get the emergency stop service
@@ -113,12 +120,14 @@ private:
     // ========== Hardware Abstraction Layer ==========
     ESP32Motor motor_;
     ESP32Sensor<PinConfig::ANCHOR_HOME> home_sensor_impl_;
+    BowPropellerMotor bow_propeller_motor_;
 
     // ========== Business Logic Controllers ==========
-    WinchController winch_controller_;
+    AnchorWinchController winch_controller_;
     HomeSensor home_sensor_;
     AutomaticModeController* auto_mode_controller_ = nullptr;
     RemoteControl* remote_control_ = nullptr;
+    BowPropellerController* bow_propeller_controller_ = nullptr;
 
     // ========== Services ==========
     EmergencyStopService* emergency_stop_service_ = nullptr;

@@ -1,8 +1,13 @@
-# Phase 5: Hardware Integration Validation
+# Phase 5: Hardware Integration Validation - Anchor Windlass & Bow Thruster
 
-**Status**: 🚀 **STARTING**  
-**Objective**: Validate all features on actual ESP32 hardware with comprehensive manual testing  
+**Status**: 🚀 **ACTIVE**  
+**Objective**: Validate all features on actual ESP32 hardware with comprehensive manual testing for both anchor windlass and bow thruster systems
 **Prerequisites**: Phase 4 (unit tests) complete, firmware successfully uploaded to device
+
+**Scope**: This document covers hardware validation for:
+- **Anchor Windlass System**: Pulse counting, motor control, home sensor, automatic positioning
+- **Bow Thruster System**: Motor control, mutual exclusion, direction switching
+- **Unified Safety**: Emergency stop affecting both systems
 
 ---
 
@@ -12,14 +17,14 @@
 - [ ] ESP32 Dev Kit connected via USB to PC
 - [ ] Serial monitor ready (COM port identified)
 - [ ] Pulse counter test setup ready (simulated chain movement)
-- [ ] Remote control buttons accessible
+- [ ] Remote control buttons accessible (GPIO 12/13 for anchor, GPIO 15/16 for bow)
 - [ ] SignalK server running on network (if available)
-- [ ] Spare GPIO outputs connected for testing
+- [ ] Relay outputs connected for testing (GPIO 4/5 for bow, GPIO 14/27 for anchor)
 
 ### Firmware Status
 - [ ] Latest firmware built and uploaded
 - [ ] Device boots without errors
-- [ ] Serial logs show initialization complete
+- [ ] Serial logs show initialization complete (both anchor and bow systems)
 - [ ] No runtime crashes or watchdog resets
 
 ---
@@ -35,16 +40,16 @@
 2. Open serial monitor at 115200 baud
 3. Observe boot sequence in logs
 4. Check GPIO pin states (use multimeter or logic analyzer):
-   - WINCH_UP (GPIO 13): Should read HIGH (inactive)
-   - WINCH_DOWN (GPIO 12): Should read HIGH (inactive)
-   - REMOTE_OUT1 (GPIO 4): Should read HIGH (inactive)
-   - REMOTE_OUT2 (GPIO 5): Should read HIGH (inactive)
+   - ANCHOR_UP (GPIO 27): Should read HIGH (inactive)
+   - ANCHOR_DOWN (GPIO 14): Should read HIGH (inactive)
+   - BOW_PORT (GPIO 4): Should read HIGH (inactive)
+   - BOW_STARBOARD (GPIO 5): Should read HIGH (inactive)
 
 **Success Criteria**:
 - ✅ Device boots without errors
 - ✅ All relay pins read HIGH on boot
 - ✅ No watchdog resets detected
-- ✅ Logs show `"=== Boat Anchor Chain Counter System ==="`
+- ✅ Logs show initialization of both anchor and bow subsystems
 
 **Commands** (if available via SignalK):
 ```
@@ -499,18 +504,272 @@ Reconnect WiFi
 
 ---
 
+## 2.8 Bow Thruster Hardware Tests
+
+**Objective**: Validate bow thruster control and safety features
+
+### 2.8.1: Bow Motor Relay Control
+
+**Test: Port Direction Activation**
+```
+Command (SignalK):
+  PUT /propulsion/bowThruster/command = -1
+
+Expected:
+  - BOW_PORT (GPIO 4) → LOW (active)
+  - BOW_STARBOARD (GPIO 5) → HIGH (inactive)
+  - Serial log: "Bow thruster: PORT"
+
+Timing:
+  - Response latency: < 100ms
+```
+
+**Test: Starboard Direction Activation**
+```
+Command (SignalK):
+  PUT /propulsion/bowThruster/command = 1
+
+Expected:
+  - BOW_PORT (GPIO 4) → HIGH (inactive)
+  - BOW_STARBOARD (GPIO 5) → LOW (active)
+  - Serial log: "Bow thruster: STARBOARD"
+```
+
+**Test: Stop Command**
+```
+Command (SignalK):
+  PUT /propulsion/bowThruster/command = 0
+
+Expected:
+  - BOW_PORT (GPIO 4) → HIGH (inactive)
+  - BOW_STARBOARD (GPIO 5) → HIGH (inactive)
+  - Serial log: "Bow thruster: STOP"
+```
+
+**Success Criteria**:
+- ✅ PORT activates only GPIO 4
+- ✅ STARBOARD activates only GPIO 5
+- ✅ STOP deactivates both
+- ✅ No simultaneous activation of both directions
+
+### 2.8.2: Mutual Exclusion Protection
+
+**Test: Prevent Simultaneous Activation**
+```
+Setup:
+  - Thruster currently at PORT
+  - Try to activate STARBOARD immediately
+
+Expected:
+  - Old direction (PORT) → deactivates first
+  - New direction (STARBOARD) → activates
+  - Never both relays active simultaneously
+  - Logs show direction transition
+
+Timing:
+  - Direction switch: < 100ms total
+  - No "spark" window
+```
+
+**Test: Rapid Direction Switching**
+```
+Commands in sequence (50ms apart):
+  1. PORT
+  2. STARBOARD
+  3. PORT
+  4. STARBOARD
+  5. STOP
+
+Expected:
+  - Each transition smooth
+  - GPIO states always safe (never both active)
+  - No motor glitches
+  - All commands processed
+
+Success:
+  - ✅ Safe transitions throughout
+  - ✅ Correct final state (STOP)
+```
+
+### 2.8.3: Remote Control (Physical Buttons)
+
+**Test: FUNC3 Button (Port)**
+```
+Setup:
+  - Press physical button on remote (GPIO 15 - FUNC3)
+  
+Expected:
+  - BOW_PORT (GPIO 4) → LOW (activate)
+  - Serial log: "BOW PORT activated"
+  
+While button held:
+  - Thruster remains in PORT
+  
+When released:
+  - BOW_PORT (GPIO 4) → HIGH (deactivate)
+  - Serial log: "BOW STOP (release)"
+```
+
+**Test: FUNC4 Button (Starboard)**
+```
+Setup:
+  - Press physical button on remote (GPIO 16 - FUNC4)
+  
+Expected:
+  - BOW_STARBOARD (GPIO 5) → LOW (activate)
+  - Serial log: "BOW STARBOARD activated"
+
+When released:
+  - BOW_STARBOARD (GPIO 5) → HIGH (deactivate)
+  - Serial log: "BOW STOP (release)"
+```
+
+**Test: Button Release = Stop (Deadman Switch)**
+```
+Setup:
+  - Thruster actively running (either direction)
+  - Release button immediately
+
+Expected:
+  - Motor stops within 50ms
+  - Both GPIO pins return to HIGH
+  - Demonstrates safety deadman switch
+
+Success:
+  - ✅ Responsive release behavior
+  - ✅ Safe shutdown confirmed
+```
+
+**Test: Remote Priority Over SignalK**
+```
+Setup:
+  - Send STARBOARD via SignalK
+  - Verify thruster activates
+  - While running, press FUNC3 button (PORT)
+
+Expected:
+  - PORT command from button wins
+  - STARBOARD is overridden
+  - Port direction activates
+  - Remote takes priority
+
+Success:
+  - ✅ Remote priority verified
+  - ✅ Safety by priority confirmed
+```
+
+### 2.8.4: Emergency Stop (Affects Bow Thruster)
+
+**Test: Emergency Stop Halts Bow Thruster**
+```
+Setup:
+  - Activate BOW_PORT via SignalK
+  - Motor running
+  - Send emergency stop command
+
+Command (SignalK):
+  PUT /navigation/bow/ecu/emergencyStopCommand = true
+
+Expected:
+  - Both BOW_PORT and BOW_STARBOARD → HIGH immediately
+  - Motor stops within 50ms
+  - Serial log: "EMERGENCY STOP - shutting down all systems"
+  - SignalK output: /navigation/bow/ecu/emergencyStopStatus = true
+```
+
+**Test: Bow Thruster Blocked During Emergency Stop**
+```
+Setup:
+  - Emergency stop is active
+  - Try to send PORT/STARBOARD commands
+
+Expected:
+  - Motor doesn't activate
+  - Relays stay HIGH (inactive)
+  - Logs show: "Command rejected - emergency stop active"
+```
+
+**Test: Unified Emergency Stop (Both Systems)**
+```
+Setup:
+  - Anchor windlass running (WINCH_UP active)
+  - Bow thruster running (BOW_PORT active)
+  - Send emergency stop
+
+Expected:
+  - All 4 relay outputs → HIGH (all inactive)
+  - Both systems stop simultaneously (atomic)
+  - Logs confirm both systems disabled
+  - No partial stop condition
+
+Success:
+  - ✅ Atomic emergency stop verified
+  - ✅ Both subsystems affected equally
+```
+
+### 2.8.5: SignalK Integration (Bow Thruster)
+
+**Test: Bow Status Output**
+```
+Setup:
+  - Activate STARBOARD via remote
+  - Subscribe to propulsion.bowThruster.status
+
+Expected in SignalK:
+  - propulsion.bowThruster.status = 1 (STARBOARD)
+  
+Switch direction:
+  - Send PORT command
+  - propulsion.bowThruster.status = -1
+
+Switch to STOP:
+  - Send STOP command
+  - propulsion.bowThruster.status = 0
+
+Success:
+  - ✅ Status reflects actual direction
+  - ✅ Updates within 100ms of command
+```
+
+**Test: SignalK Command Values**
+```
+Verify command mapping:
+  - PUT command = -1 → PORT
+  - PUT command = 0 → STOP
+  - PUT command = 1 → STARBOARD
+  - All other values → STOP (safe fallback)
+```
+
+**Test: Connection Loss Blocking**
+```
+Setup:
+  - Device connected to SignalK
+  - Send PORT command (thruster activates)
+  - Disconnect SignalK (stop server/reboot)
+  - Try to send STARBOARD command via SignalK
+
+Expected:
+  - Command blocked (no active connection)
+  - Thruster stays in current state (PORT)
+  - Logs show: "SignalK disconnected - blocking new commands"
+  - After reconnect, commands accepted again
+```
+
+---
+
 ## 3. Load Testing
 
-### 3.1 Sustained Motor Operation
+### 3.1 Sustained Motor Operation (Both Systems)
 ```
 Objective: Motor stability under continuous operation
 
-Test:
-  - Activate motor at 50% duty (pulse command every 50ms)
-  - Run for 5 minutes continuous
+Test (Anchor + Bow):
+  - Activate anchor WINCH_UP at 50% duty
+  - Activate bow PORT at 50% duty  
+  - Run both for 5 minutes continuous
   - Monitor:
     - Temperature (device shouldn't get hot)
-    - Current draw (relay amperage)
+    - Current draw (total amperage)
     - Watchdog resets (should be zero)
     - Serial logs (should be smooth)
 
@@ -518,24 +777,25 @@ Success:
   - ✅ No watchdog resets
   - ✅ No temperature warnings
   - ✅ Smooth operation throughout
+  - ✅ Both systems operate independently
 ```
 
-### 3.2 Rapid Command Switching
+### 3.2 Rapid Command Switching (Both Systems)
 ```
 Objective: Handle fast mode changes without glitches
 
-Test:
-  - Send UP command
-  - After 100ms, send STOP
-  - After 100ms, send DOWN
-  - After 100ms, send STOP
+Test (Interleaved):
+  - Anchor: UP, STOP, DOWN, STOP
+  - Bow: PORT, STOP, STARBOARD, STOP
+  - Interleave commands (send alternating)
   - Repeat 10 times in rapid succession
 
 Success:
   - ✅ All transitions smooth
-  - ✅ No stuck states
-  - ✅ GPIO changes correct
-  - ✅ No motor "jerks" or strange behavior
+  - ✅ No stuck states in either system
+  - ✅ GPIO changes correct on all pins
+  - ✅ No motor "jerks"
+  - ✅ Systems independent (one doesn't affect the other)
 ```
 
 ### 3.3 High Pulse Rate

@@ -6,7 +6,7 @@
 #include "sensesp/ui/config_item.h"
 #include "sensesp/ui/ui_controls.h"
 
-#include "services/BoatAnchorApp.h"
+#include "services/BoatBowControlApp.h"
 #include "secrets.h"
 
 #ifndef AP_PASSWORD
@@ -94,12 +94,12 @@ namespace {
 // ========================================
 // Global Application Instance
 // ========================================
-BoatAnchorApp app;
+BoatBowControlApp app;
 
 void setup() {
     // Initialize logging (must be first)
     SetupLogging();
-    debugD("=== Boat Anchor Chain Counter System ===");
+    debugD("=== Boat Anchor Chain Counter and Bow Control System ===");
     debugD("Build: %s @ %s", __DATE__, __TIME__);
 
     // Setup SensESP with network and web UI FIRST (creates sensesp_app global)

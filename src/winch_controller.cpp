@@ -3,7 +3,7 @@
 
 using namespace sensesp;
 
-void WinchController::moveUp() {
+void AnchorWinchController::moveUp() {
     if (home_sensor_.isActive()) {
         debugD("Anchor already home - cannot retrieve further");
         stop();
@@ -12,22 +12,22 @@ void WinchController::moveUp() {
     motor_.moveUp();
 }
 
-void WinchController::moveDown() {
+void AnchorWinchController::moveDown() {
     motor_.moveDown();
 }
 
-void WinchController::stop() {
+void AnchorWinchController::stop() {
     motor_.stop();
 }
 
-bool WinchController::isActive() const {
+bool AnchorWinchController::isActive() const {
     return motor_.isActive();
 }
 
-bool WinchController::isMovingUp() const {
+bool AnchorWinchController::isMovingUp() const {
     return motor_.isMovingUp();
 }
 
-bool WinchController::isMovingDown() const {
+bool AnchorWinchController::isMovingDown() const {
     return motor_.isMovingDown();
 }

@@ -1,4 +1,4 @@
-// Unit tests for BoatAnchorApp initialization and orchestration
+// Unit tests for BoatBowControlApp initialization and orchestration
 // Tests component wiring, initialization order, and ISR setup
 
 #include <unity.h>
@@ -11,9 +11,9 @@ extern bool mock_gpio_states[40];
 extern int mock_gpio_modes[40];
 
 // Mock implementations of service classes
-class MockBoatAnchorApp {
+class MockBoatBowControlApp {
 public:
-    MockBoatAnchorApp() 
+    MockBoatBowControlApp() 
         : sensesp_app_available_(false),
           hardware_initialized_(false),
           controllers_initialized_(false),
@@ -73,7 +73,7 @@ public:
 };
 
 // Simulate sensesp_app global
-MockBoatAnchorApp* global_sensesp_app = nullptr;
+MockBoatBowControlApp* global_sensesp_app = nullptr;
 
 void setSensespAppAvailable(bool available) {
     if (global_sensesp_app) {
@@ -84,7 +84,7 @@ void setSensespAppAvailable(bool available) {
 // ========== TESTS ==========
 
 void test_initialization_order_hardware_first() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     
     // Verify hardware is initialized first
     app.initializeHardware();
@@ -94,7 +94,7 @@ void test_initialization_order_hardware_first() {
 }
 
 void test_initialization_order_controllers_second() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     
     app.initializeHardware();
     app.initializeControllers();
@@ -105,7 +105,7 @@ void test_initialization_order_controllers_second() {
 }
 
 void test_initialization_order_services_third() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     
     app.initialize();  // Calls all three in order
     
@@ -115,7 +115,7 @@ void test_initialization_order_services_third() {
 }
 
 void test_cannot_initialize_services_without_hardware() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     
     // Skip hardware init
     TEST_ASSERT_FALSE(app.hardware_initialized_);
@@ -128,7 +128,7 @@ void test_cannot_initialize_services_without_hardware() {
 }
 
 void test_cannot_initialize_services_without_controllers() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     
     app.initializeHardware();
     // Skip controller init
@@ -142,7 +142,7 @@ void test_cannot_initialize_services_without_controllers() {
 }
 
 void test_signalk_cannot_start_without_sensesp_app() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     app.sensesp_app_available_ = false;
     
     app.startSignalK();
@@ -152,7 +152,7 @@ void test_signalk_cannot_start_without_sensesp_app() {
 }
 
 void test_signalk_starts_with_sensesp_available() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     app.sensesp_app_available_ = true;
     
     app.startSignalK();
@@ -161,7 +161,7 @@ void test_signalk_starts_with_sensesp_available() {
 }
 
 void test_full_initialization_sequence() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     app.sensesp_app_available_ = true;
     
     app.initialize();
@@ -173,7 +173,7 @@ void test_full_initialization_sequence() {
 }
 
 void test_motor_gpio_pins_configured() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     
     // Set up GPIO modes as the hardware init would
     mock_gpio_modes[PinConfig::WINCH_UP] = OUTPUT;
@@ -195,7 +195,7 @@ void test_relay_pins_default_inactive() {
 }
 
 void test_sensor_pins_configured_as_input() {
-    MockBoatAnchorApp app;
+    MockBoatBowControlApp app;
     
     // Set up GPIO modes
     mock_gpio_modes[PinConfig::ANCHOR_HOME] = INPUT_PULLUP;

@@ -7,17 +7,19 @@
 using namespace sensesp;
 
 SignalKService::SignalKService(StateManager& state_manager,
-                               WinchController& winch_controller,
+                               AnchorWinchController& winch_controller,
                                HomeSensor& home_sensor,
                                AutomaticModeController* auto_mode_controller,
                                EmergencyStopService* emergency_stop_service,
-                               PulseCounterService* pulse_counter_service)
+                               PulseCounterService* pulse_counter_service,
+                               BowPropellerController* bow_propeller_controller)
     : state_manager_(state_manager),
       winch_controller_(winch_controller),
       home_sensor_(home_sensor),
       auto_mode_controller_(auto_mode_controller),
       emergency_stop_service_(emergency_stop_service),
-      pulse_counter_service_(pulse_counter_service) {}
+      pulse_counter_service_(pulse_counter_service),
+      bow_propeller_controller_(bow_propeller_controller) {}
 
 void SignalKService::initialize() {
     setupRodeLengthOutput();
@@ -25,6 +27,7 @@ void SignalKService::initialize() {
     setupManualControlBindings();
     setupAutoModeBindings();
     setupHomeCommandBindings();
+    setupBowPropellerBindings();
 }
 
 void SignalKService::setupRodeLengthOutput() {
@@ -284,4 +287,46 @@ void SignalKService::startConnectionMonitoring() {
             }
         }
     });
+}
+
+void SignalKService::setupBowPropellerBindings() {
+    if (!bow_propeller_controller_) {
+        debugD("Bow propeller controller not available - skipping SignalK bindings");
+        return;
+    }
+    
+    // Bow Propeller Command: Three states (-1=PORT, 0=STOP, 1=STARBOARD)
+    bow_propeller_command_output_ = new SKOutputInt("propulsion.bowThruster.command", "/bow_propeller_command/sk_path");
+    bow_propeller_command_output_->set_input(0);  // Initialize to STOP on boot
+    
+    bow_propeller_status_output_ = new SKOutputInt("propulsion.bowThruster.status", "/bow_propeller_status/sk_path");
+    bow_propeller_status_output_->set_input(0);  // Initialize to STOP on boot
+    
+    auto* bow_command_listener = new IntSKListener("propulsion.bowThruster.command");
+    
+    bow_command_listener->connect_to(new LambdaTransform<int, int>([this](int command) {
+        if (state_manager_.isEmergencyStopActive()) return 0;
+        if (!state_manager_.areCommandsAllowed()) return 0;  // Block until connection stable
+        
+        if (command == 1) {
+            bow_propeller_controller_->turnStarboard();
+            if (bow_propeller_status_output_) {
+                bow_propeller_status_output_->set_input(1);
+            }
+            debugD("Bow propeller command: STARBOARD");
+        } else if (command == -1) {
+            bow_propeller_controller_->turnPort();
+            if (bow_propeller_status_output_) {
+                bow_propeller_status_output_->set_input(-1);
+            }
+            debugD("Bow propeller command: PORT");
+        } else {
+            bow_propeller_controller_->stop();
+            if (bow_propeller_status_output_) {
+                bow_propeller_status_output_->set_input(0);
+            }
+            debugD("Bow propeller command: STOP");
+        }
+        return command;
+    }))->connect_to(bow_propeller_command_output_);
 }
