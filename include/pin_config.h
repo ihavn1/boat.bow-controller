@@ -24,8 +24,8 @@ struct PinConfig {
     // Remote control inputs
     static constexpr uint8_t REMOTE_UP = 12;    ///< Physical remote UP button (active HIGH)
     static constexpr uint8_t REMOTE_DOWN = 13;  ///< Physical remote DOWN button (active HIGH)
-    static constexpr uint8_t REMOTE_FUNC3 = 15; ///< Spare remote input (future use)
-    static constexpr uint8_t REMOTE_FUNC4 = 16; ///< Spare remote input (future use)
+    static constexpr uint8_t REMOTE_FUNC3 = 15; ///< Physical remote button - Bow PORT thruster (active HIGH)
+    static constexpr uint8_t REMOTE_FUNC4 = 16; ///< Physical remote button - Bow STARBOARD thruster (active HIGH)
     
     // Bow propeller relays (active-LOW: write LOW to activate, HIGH to deactivate)
     static constexpr uint8_t BOW_PORT = 4;      ///< Bow propeller port (left) thruster relay
