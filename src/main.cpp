@@ -19,6 +19,12 @@
 
 using namespace sensesp;
 
+// ========================================
+// Configuration Variables (persisted in SPIFFS)
+// ========================================
+float g_config_meters_per_pulse = 0.01f;  // Default: 1cm per pulse
+String g_config_path_meters_per_pulse = "/Calibration/MetersPerPulse";
+
 namespace {
     bool findConfigFile(const String& config_path, String& filename) {
         const String hash_path = String("/") + Base64Sha1(config_path);
@@ -112,8 +118,18 @@ void setup() {
                       ->enable_ota(OTA_PASSWORD)
                       ->get_app();
 
+    // Register SensESP configuration items (must be before sensesp_app->start())
+    // Meters per pulse is a calibration value persisted in SPIFFS
+    ConfigItem(new NumberConfig(g_config_meters_per_pulse, g_config_path_meters_per_pulse))
+        ->set_title("Meters Per Pulse")
+        ->set_description("Calibration: distance in meters for each chain counter pulse")
+        ->set_sort_order(200);
+
     // Now initialize the application hardware and services (uses sensesp_app)
     app.initialize();
+    
+    // Load the configured value into the state manager
+    app.getStateManager().setMetersPerPulse(g_config_meters_per_pulse);
 
     // Initialize web UI and start
     sensesp_app->start();

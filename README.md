@@ -56,8 +56,11 @@ An ESP32-based dual-system controller for anchor chain management and bow thrust
 
 1. **Hardware Setup**: Connect sensors and relays according to GPIO pin configuration
 2. **Flash Firmware**: Upload code to ESP32 using PlatformIO
-3. **Configure WiFi**: Connect to `bow-controller` access point on first boot
-4. **Calibrate**: Set meters-per-pulse value via web interface at `http://bow-controller.local/`
+3. **Configure WiFi**: Connect to `anchor-counter` access point on first boot
+4. **Calibrate**: Set meters-per-pulse value via SensESP web UI at `http://anchor-counter.local/` 
+   - Navigate to **System > Calibration** section
+   - Adjust **Meters Per Pulse** value (default: 0.01m per pulse)
+   - Value persists in device memory across reboots
 5. **SignalK Integration**: Device automatically connects and publishes/subscribes to SignalK paths
 6. **OTA Setup (optional)**: Copy `src/secrets.example.h` to `src/secrets.h` and set `AP_PASSWORD` and `OTA_PASSWORD`
 
@@ -168,6 +171,28 @@ Note: Remote control takes priority over SignalK commands and automatically disa
 ## Documentation
 
 See [ANCHOR_CHAIN_USAGE.md](ANCHOR_CHAIN_USAGE.md) for detailed usage instructions, REST API examples, safety notes, and troubleshooting.
+
+## Data Persistence
+
+The system persists the following configuration across reboots:
+
+| Data | Storage | Persistence |
+|------|---------|-------------|
+| **Meters Per Pulse** (calibration) | SensESP ConfigItem (SPIFFS) | ✅ Persists across reboots |
+| WiFi Settings (SSID, password) | SensESP SPIFFS | ✅ Persists across reboots |
+| AP Mode Settings | SensESP SPIFFS | ✅ Persists across reboots |
+
+The following operational data is **volatile** and resets on each boot:
+
+| Data | Reset Value | Rationale |
+|------|-------------|-----------|
+| Pulse Count | 0 | Must restart counting each session |
+| Rode Length | 0.0m | Calculated from pulse count |
+| Emergency Stop State | Inactive | Safety default on boot |
+| Auto Mode State | Disabled | Safety default |
+| Manual Control State | STOP | Safety default |
+
+**Note**: Chain deployment state is not persisted. After a reboot, the system assumes the anchor is at home (0m). Use the `navigation.anchor.resetRode` SignalK command to explicitly set the counter if needed.
 
 ## Technology Stack
 

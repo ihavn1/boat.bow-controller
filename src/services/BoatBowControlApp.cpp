@@ -87,7 +87,7 @@ void BoatBowControlApp::initializeHardware() {
 void BoatBowControlApp::initializeControllers() {
     // Initialize automatic mode controller
     auto_mode_controller_ = new AutomaticModeController(winch_controller_, home_sensor_);
-    state_manager_.setMetersPerPulse(0.01f);
+    // Note: meters_per_pulse is set by main.cpp from SensESP ConfigItem after initialize()
     auto_mode_controller_->setTolerance(state_manager_.getMetersPerPulse() * 2.0);
     
     // Initialize remote control
