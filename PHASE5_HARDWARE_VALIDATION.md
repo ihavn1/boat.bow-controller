@@ -79,7 +79,7 @@ Setup:
 Expected:
   - Pulse count increases by 20
   - Rode length increases by 0.2m (20 pulses × 0.01m/pulse)
-  - SignalK output: navigation.anchor.rodeLength = 0.2
+  - SignalK output: navigation.anchor.currentRode = 0.2
 
 Verify via logs:
   - Serial should show: "Pulse count: 20, Rode: 0.20m"
@@ -128,7 +128,7 @@ Expected:
 **Commands**:
 ```
 # Check rode length via SignalK
-GET /navigation/anchor/rodeLength
+GET /navigation/anchor/currentRode
 ```
 
 ---
@@ -139,8 +139,8 @@ GET /navigation/anchor/rodeLength
 
 **Test Setup**:
 - Motor GPIO pins monitored (logic analyzer recommended)
-- WINCH_UP: GPIO 13
-- WINCH_DOWN: GPIO 12
+- WINCH_UP: GPIO 27 (retrieve chain)
+- WINCH_DOWN: GPIO 14 (deploy chain)
 
 **Test 2.3.1: Manual UP Command**
 ```
@@ -148,8 +148,8 @@ Command via SignalK:
   PUT /navigation/anchor/manualControl = 1
 
 Expected:
-  - WINCH_UP (GPIO 13) = LOW (within 100ms)
-  - WINCH_DOWN (GPIO 12) = HIGH (stays inactive)
+  - WINCH_UP (GPIO 27) = LOW (within 100ms)
+  - WINCH_DOWN (GPIO 14) = HIGH (stays inactive)
   - Serial log: "Manual control: UP"
   - Device continues until STOP command
 
@@ -163,8 +163,8 @@ Command via SignalK:
   PUT /navigation/anchor/manualControl = -1
 
 Expected:
-  - WINCH_DOWN (GPIO 12) = LOW (within 100ms)
-  - WINCH_UP (GPIO 13) = HIGH (stays inactive)
+  - WINCH_DOWN (GPIO 14) = LOW (within 100ms)
+  - WINCH_UP (GPIO 27) = HIGH (stays inactive)
   - Serial log: "Manual control: DOWN"
 ```
 
@@ -174,7 +174,7 @@ Command via SignalK:
   PUT /navigation/anchor/manualControl = 0
 
 Expected:
-  - Both WINCH_UP and WINCH_DOWN = HIGH (inactive)
+  - Both WINCH_UP (GPIO 27) and WINCH_DOWN (GPIO 14) = HIGH (inactive)
   - Serial log: "Manual control: STOP"
   - Motor stops immediately
 ```
@@ -218,13 +218,14 @@ Setup:
   - While motor running, activate emergency stop
 
 Command (SignalK):
-  PUT /navigation/anchor/emergencyStop = 1
+  PUT /navigation/bow/ecu/emergencyStopCommand = true
 
 Expected Immediately:
-  - Both WINCH_UP and WINCH_DOWN → HIGH (motor stops)
-  - Serial log: "EMERGENCY STOP ACTIVATED (signalk)"
-  - SignalK output: navigation.anchor.emergencyStop = 1
-  - All control inputs blocked
+  - Both WINCH_UP (GPIO 27) and WINCH_DOWN (GPIO 14) → HIGH (motor stops)
+  - Both BOW_PORT (GPIO 4) and BOW_STARBOARD (GPIO 5) → HIGH (both stop)
+  - Serial log: "EMERGENCY STOP ACTIVATED"
+  - SignalK output: navigation.bow.ecu.emergencyStopStatus = true
+  - All control inputs blocked (both anchor and bow)
 
 Timing:
   - Motor stop latency: < 100ms
@@ -235,24 +236,25 @@ Timing:
 ```
 Setup:
   - Emergency stop is active
-  - Try to send UP/DOWN/manual commands
+  - Try to send UP/DOWN/manual commands to anchor
+  - Try to send PORT/STARBOARD commands to bow
 
 Expected:
-  - Motor doesn't activate
-  - Relays stay HIGH (inactive)
-  - SignalK command returns: command rejected (internal logic)
+  - Motors don't activate
+  - All relays stay HIGH (inactive)
+  - SignalK commands rejected
   - Logs show: "Emergency stop active - blocking command"
 ```
 
 **Test 2.4.3: Clear Emergency Stop**
 ```
 Command (SignalK):
-  PUT /navigation/anchor/emergencyStop = 0
+  PUT /navigation/bow/ecu/emergencyStopCommand = false
 
 Expected:
-  - signalk output: navigation.anchor.emergencyStop = 0
+  - SignalK output: navigation.bow.ecu.emergencyStopStatus = false
   - Control inputs accepted again
-  - Motor can be commanded
+  - Both anchor and bow motors can be commanded
 
 Timing:
   - Response < 100ms
@@ -356,14 +358,14 @@ Command (SignalK):
   PUT /navigation/anchor/automaticModeCommand = 1.0
 
 Expected:
-  - WINCH_UP → LOW (deploy chain)
+  - WINCH_DOWN (GPIO 14) → LOW (deploy chain)
   - Motor activates and runs  
   - Pulse counter increases rode length
   - Logs show: "Automatic mode: DEPLOYING to 5.0m"
 
 Continue until:
   - Rode length reaches 5.0m ± tolerance (0.02m)
-  - WINCH_UP → HIGH (motor stops)
+  - WINCH_DOWN (GPIO 14) → HIGH (motor stops)
   - SignalK output: navigation.anchor.automaticModeStatus = 0 (auto-disabled)
   - Logs show: "Target reached, auto-mode disabled"
 
@@ -381,14 +383,14 @@ Command (SignalK):
   PUT /navigation/anchor/automaticModeCommand = 1.0
 
 Expected:
-  - WINCH_DOWN → LOW (retrieve chain)
+  - WINCH_UP (GPIO 27) → LOW (retrieve chain)
   - Motor activates and runs
   - Pulse counter decreases rode length
   - Logs show: "Automatic mode: RETRIEVING to 5.0m"
 
 Continue until:
   - Rode length reaches 5.0m ± tolerance
-  - WINCH_DOWN → HIGH (motor stops)
+  - WINCH_UP (GPIO 27) → HIGH (motor stops)
   - SignalK output: navigation.anchor.automaticModeStatus = 0
 ```
 
@@ -454,14 +456,14 @@ Expected in logs:
 Expected in logs:
   - "Connecting to SignalK server..."
   - "SignalK connection established"
-  - "Publishing: navigation.anchor.rodeLength = X"
+  - "Publishing: navigation.anchor.currentRode = X"
 ```
 
 **Test 2.7.3: Status Outputs**
 ```
 Check SignalK server for values:
-  - navigation.anchor.rodeLength (rode deployed, meters)
-  - navigation.anchor.emergencyStop (0/1 boolean)
+  - navigation.anchor.currentRode (rode deployed, meters)
+  - navigation.bow.ecu.emergencyStopStatus (0/1 boolean)
   - navigation.anchor.manualControlStatus (current manual state)
   - navigation.anchor.automaticModeStatus (auto mode running)
   - navigation.anchor.targetRodeStatus (armed target)
@@ -471,7 +473,7 @@ Check SignalK server for values:
 ```
 Send values from SignalK server:
   - navigation.anchor.manualControl = 1 (expect motor UP)
-  - navigation.anchor.emergencyStop = 1 (expect motor stops)
+  - navigation.bow.ecu.emergencyStopCommand = true (expect all motors stop)
   - navigation.anchor.automaticModeCommand = 1.0 (expect auto-mode)
   - navigation.anchor.targetRodeCommand = X (expect target armed)
 
